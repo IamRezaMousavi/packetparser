@@ -2,6 +2,7 @@
 #define __DNS_HPP__
 
 #include <cinttypes>
+#include <iomanip>
 #include <netinet/in.h>
 #include <sstream>
 #include <string>
@@ -40,7 +41,7 @@ enum DNSFlags {
 };
 
 struct DNSHeader {
-  uint16_t id;
+  uint16_t transactionId;
   uint16_t flags;
   uint16_t q_count;
   uint16_t and_count;
@@ -55,7 +56,7 @@ struct DNSQuery {
 };
 
 struct DNS {
-  uint16_t id;
+  uint16_t transactionId;
   uint16_t flags;
 
   uint16_t queriesCount;
@@ -96,7 +97,7 @@ DNS parseDNS(const u_char *data) {
   int offset = 0;
 
   const DNSHeader *dnsHeader = (DNSHeader *)data;
-  packet.id = ntohs(dnsHeader->id);
+  packet.transactionId = ntohs(dnsHeader->transactionId);
   packet.flags = ntohs(dnsHeader->flags);
   packet.queriesCount = ntohs(dnsHeader->q_count);
   packet.answersCount = ntohs(dnsHeader->and_count);
@@ -111,79 +112,73 @@ DNS parseDNS(const u_char *data) {
   return packet;
 }
 
-std::ostream &operator<<(std::ostream &os, const DNSQuery &query) {
-  os << "    Query Name: " << query.name << std::endl;
-  os << "    Query Type: ";
-  switch (query.type) {
+std::string QTypeToString(QType type) {
+  switch (type) {
   case QTYPE_A:
-    os << "A" << std::endl;
-    break;
+    return "A";
   case QTYPE_NS:
-    os << "NS" << std::endl;
-    break;
+    return "NS";
   case QTYPE_CNAME:
-    os << "CNAME" << std::endl;
-    break;
+    return "CNAME";
   case QTYPE_SOA:
-    os << "SOA" << std::endl;
-    break;
+    return "SOA";
   case QTYPE_PTR:
-    os << "PTR" << std::endl;
-    break;
+    return "PTR";
   case QTYPE_MX:
-    os << "MX" << std::endl;
-    break;
+    return "MX";
   case QTYPE_TXT:
-    os << "TXT" << std::endl;
-    break;
+    return "TXT";
   case QTYPE_AAAA:
-    os << "AAAA" << std::endl;
-    break;
+    return "AAAA";
   case QTYPE_SRV:
-    os << "SRV" << std::endl;
-    break;
+    return "SRV";
   case QTYPE_ANY:
-    os << "ANY" << std::endl;
-    break;
+    return "ANY";
   default:
-    os << "Unknown" << std::endl;
-    break;
+    return "Unknown";
   }
+}
 
-  os << "    Query Class: ";
-  switch (query.qclass) {
+std::string QClassToString(QClass qclass) {
+  switch (qclass) {
   case QCLASS_IN:
-    os << "IN" << std::endl;
-    break;
+    return "IN";
   case QCLASS_CS:
-    os << "CS" << std::endl;
-    break;
+    return "CS";
   case QCLASS_CH:
-    os << "CH" << std::endl;
-    break;
+    return "CH";
   case QCLASS_HS:
-    os << "HS" << std::endl;
-    break;
+    return "HS";
   case QCLASS_ANY:
-    os << "ANY" << std::endl;
-    break;
+    return "ANY";
   default:
-    os << "Unknown" << std::endl;
-    break;
+    return "Unknown";
   }
+}
 
+std::ostream &operator<<(std::ostream &os, const DNSQuery &query) {
+  os << "+------------------+-------------------+" << std::endl;
+  os << "|       Query Name | " << query.name << std::endl;
+  os << "|       Query Type | " << std::left << std::setw(17) << QTypeToString((QType)query.type) << " |" << std::endl;
+  os << "|      Query Class | " << std::left << std::setw(17) << QClassToString((QClass)query.qclass) << " |"
+     << std::endl;
+  os << "+------------------+-------------------+" << std::endl;
   return os;
 }
 
 std::ostream &operator<<(std::ostream &os, const DNS &packet) {
-  os << "DNS Packet:" << std::endl;
-  os << "    Transaction ID: 0x" << std::hex << packet.id << std::dec << std::endl;
-  os << "    Flags: 0x" << std::hex << packet.flags << std::dec << std::endl;
-  os << "    Queries Count: " << packet.queriesCount << std::endl;
-  os << "    Answers Count: " << packet.answersCount << std::endl;
-  os << "    Authority Count: " << packet.authoritiesCount << std::endl;
-  os << "    Additional Count: " << packet.additionalsCount << std::endl;
-
+  os << "|                 DNS                  |" << std::endl;
+  os << "+------------------+-------------------+" << std::endl;
+  os << "|   Transaction ID | 0x" << std::left << std::setw(15) << std::hex << packet.transactionId << std::dec << " |"
+     << std::endl;
+  os << "|            Flags | 0x" << std::left << std::setw(15) << std::hex << packet.flags << std::dec << " |"
+     << std::endl;
+  os << "|        Questions | " << std::left << std::setw(17) << packet.queriesCount << " |" << std::endl;
+  os << "|       Answer PRs | " << std::left << std::setw(17) << packet.answersCount << " |" << std::endl;
+  os << "|    Authority PRs | " << std::left << std::setw(17) << packet.authoritiesCount << " |" << std::endl;
+  os << "|   Additional PRs | " << std::left << std::setw(17) << packet.additionalsCount << " |" << std::endl;
+  os << "+------------------+-------------------+" << std::endl;
+  os << "|               Queries                |" << std::endl;
   for (const auto &query : packet.queries) {
     os << query;
   }

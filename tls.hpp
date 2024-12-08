@@ -2,6 +2,7 @@
 #define __TLS_HPP__
 
 #include <cinttypes>
+#include <iomanip>
 #include <iostream>
 #include <optional>
 #include <string>
@@ -249,22 +250,34 @@ const char *TLSExtensionTypeToString(TLSExtensionType type) {
 }
 
 std::ostream &operator<<(std::ostream &os, const TLS &packet) {
-  os << "TLS Packet:\n";
-  os << "  Content Type: " << TLSContentTypeToString((TLSContentType)packet.contentType) << "\n";
-  os << "  Version: " << TLSVersionToString((TLSVersion)packet.version) << "\n";
-  os << "  Length: " << packet.len << "\n";
-
+  os << "|                 TLS                  |" << std::endl;
+  os << "+------------------+-------------------+" << std::endl;
+  os << "|     Content Type | " << std::left << std::setw(17)
+     << TLSContentTypeToString((TLSContentType)packet.contentType) << " |" << std::endl;
+  os << "|          Version | " << std::left << std::setw(17) << TLSVersionToString((TLSVersion)packet.version) << " |"
+     << std::endl;
+  os << "|           Length | " << std::left << std::setw(17) << packet.len << " |" << std::endl;
+  os << "+------------------+-------------------+" << std::endl;
+  os << "|              Handshake               |" << std::endl;
+  os << "+------------------+-------------------+" << std::endl;
   // If the packet contains handshake data, output it
   if (packet.handshake.has_value()) {
     const auto &handshake = packet.handshake.value();
-    os << "  Handshake Type: " << TLSHandshakeTypeToString((TLSHandshakeType)handshake.type) << "\n";
-    os << "  Handshake Length: " << handshake.len << "\n";
+    os << "|   Handshake Type | " << std::left << std::setw(17)
+       << TLSHandshakeTypeToString((TLSHandshakeType)handshake.type) << " |" << std::endl;
+    os << "| Handshake Length | " << std::left << std::setw(17) << handshake.len << " |" << std::endl;
+    os << "+------------------+-------------------+" << std::endl;
 
-    if (!handshake.extensions.empty())
-      os << "  Extensions:\n";
+    if (!handshake.extensions.empty()) {
+      os << "+------------------+-------------------+" << std::endl;
+      os << "|             Extensions               |" << std::endl;
+      os << "+------------------+-------------------+" << std::endl;
+    }
     for (const auto &ext : handshake.extensions) {
-      os << "    Type: " << TLSExtensionTypeToString((TLSExtensionType)ext.type) << "\n";
-      os << "    SNI Hostname: " << ext.servername.name << "\n";
+      os << "|             Type | " << std::left << std::setw(17)
+         << TLSExtensionTypeToString((TLSExtensionType)ext.type) << " |" << std::endl;
+      os << "|     SNI Hostname | " << ext.servername.name << std::endl;
+      os << "+------------------+-------------------+" << std::endl;
     }
   }
 
