@@ -80,8 +80,8 @@ void packetHandler(u_char *args, const struct pcap_pkthdr *pkthdr, const u_char 
 }
 
 int main(int argc, char const *argv[]) {
-  if (argc < 2 || argc > 3) {
-    std::cerr << "Usage" << argv[0] << " <pacp file> [filter]" << std::endl;
+  if (argc < 3 || argc > 4) {
+    std::cerr << "Usage " << argv[0] << " <appname> <pacp file> [filter]" << std::endl;
     return EXIT_FAILURE;
   }
 
@@ -92,17 +92,17 @@ int main(int argc, char const *argv[]) {
   struct bpf_program filter;
   char filterExpression[256] = "";
 
-  if (argc == 3) {
-    strncpy(filterExpression, argv[2], sizeof(filterExpression) - 1);
+  if (argc == 4) {
+    strncpy(filterExpression, argv[3], sizeof(filterExpression) - 1);
   }
 
-  handle = pcap_open_offline(argv[1], errbuf);
+  handle = pcap_open_offline(argv[2], errbuf);
   if (handle == nullptr) {
     std::cerr << "Unable to open file: " << errbuf << std::endl;
     return EXIT_FAILURE;
   }
 
-  std::cout << "Reading packets from file: " << argv[1] << std::endl;
+  std::cout << "Reading packets from file: " << argv[2] << std::endl;
 
   if (strlen(filterExpression) > 0) {
     if (pcap_compile(handle, &filter, filterExpression, 0, PCAP_NETMASK_UNKNOWN) == -1) {
@@ -131,6 +131,10 @@ int main(int argc, char const *argv[]) {
   std::cout << "Servernames:" << std::endl;
   for (const auto &servername : servernames) {
     std::cout << servername << std::endl;
+  }
+
+  if (!db.insert_servername(argv[1], servernames)) {
+    std::cout << "DB Insert Error" << std::endl;
   }
 
   return EXIT_SUCCESS;
