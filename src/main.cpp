@@ -10,6 +10,7 @@
 #include <set>
 
 #include "common.hpp"
+#include "db.hpp"
 #include "dns.hpp"
 #include "tls.hpp"
 
@@ -83,6 +84,8 @@ int main(int argc, char const *argv[]) {
     std::cerr << "Usage" << argv[0] << " <pacp file> [filter]" << std::endl;
     return EXIT_FAILURE;
   }
+
+  DB db;
 
   char errbuf[PCAP_ERRBUF_SIZE];
   pcap_t *handle;

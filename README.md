@@ -4,10 +4,15 @@ A Packet Parser
 
 ## Getting started
 
-Install `libpcap-dev` and run:
+### Install Deps
+
+* `libpcap-dev`
+* `libmysqlcppconn-dev`
+
+### Compile
 
 ```bash
-g++ main.cpp dns.hpp tls.hpp -lpcap
+make
 ```
 
 ---
