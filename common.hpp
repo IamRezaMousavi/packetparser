@@ -1,5 +1,5 @@
-#ifndef __COMMON_CPP__
-#define __COMMON_CPP__
+#ifndef __COMMON_HPP__
+#define __COMMON_HPP__
 
 #include <string>
 #include <cinttypes>
@@ -76,4 +76,4 @@ std::ostream &operator<<(std::ostream &os, const TLSPacket &packet) {
     return os;
 }
 
-#endif /* __COMMON_CPP__ */
+#endif /* __COMMON_HPP__ */

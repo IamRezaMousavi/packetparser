@@ -7,10 +7,13 @@
 #include <netinet/ip.h>
 #include <netinet/tcp.h>
 #include <netinet/udp.h>
+#include <set>
 
 #include "common.hpp"
 #include "dns.hpp"
 #include "tls.hpp"
+
+std::set<std::string> servernames;
 
 void packetHandler(u_char *args, const struct pcap_pkthdr *pkthdr, const u_char *packet) {
   const struct ether_header *ethHeader = (struct ether_header *)packet;
@@ -37,6 +40,12 @@ void packetHandler(u_char *args, const struct pcap_pkthdr *pkthdr, const u_char 
                             .tls = tlsPacket};
 
         std::cout << packet << std::endl;
+        if (packet.tls.handshake.has_value()) {
+          const auto &handshake = packet.tls.handshake.value();
+          for (const auto &ext : handshake.extensions) {
+            servernames.insert(ext.servername.name);
+          }
+        }
       }
 
     } else if (ipHeader->ip_p == IPPROTO_UDP) {
@@ -55,6 +64,9 @@ void packetHandler(u_char *args, const struct pcap_pkthdr *pkthdr, const u_char 
                                .dns = packet};
 
         std::cout << dnsPacket << std::endl;
+        for (const auto &q : dnsPacket.dns.queries) {
+          servernames.insert(q.name);
+        }
       }
     }
 
@@ -112,6 +124,11 @@ int main(int argc, char const *argv[]) {
     pcap_freecode(&filter);
   }
   pcap_close(handle);
+
+  std::cout << "Servernames:" << std::endl;
+  for (const auto &servername : servernames) {
+    std::cout << servername << std::endl;
+  }
 
   return EXIT_SUCCESS;
 }
