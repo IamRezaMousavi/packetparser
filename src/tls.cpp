@@ -11,9 +11,11 @@ void parseTLSExtensions(const u_char *data, TLSHandshake &tlsHandshake) {
 
     if (extension.type == TLS_EXT_SERVERNAME) {
       TLSExtensionServerName servername;
-      servername.listLen = (data[offset++] << 8) | data[offset++];
+      servername.listLen = (data[offset] << 8) | data[offset + 1];
+      offset += 2;
       servername.type = data[offset++];
-      servername.len = (data[offset++] << 8) | data[offset++];
+      servername.len = (data[offset] << 8) | data[offset + 1];
+      offset += 2;
       servername.name = std::string(data + offset, data + offset + servername.len);
       extension.servername = servername;
       tlsHandshake.extensions.push_back(extension);
