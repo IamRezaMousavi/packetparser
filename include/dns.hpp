@@ -67,6 +67,19 @@ struct DNS {
   std::vector<DNSQuery> queries;
 };
 
+struct DNSPacket {
+  std::string shost;
+  std::string dhost;
+
+  std::string ip_src;
+  std::string ip_dst;
+
+  uint16_t sport;
+  uint16_t dport;
+
+  DNS dns;
+};
+
 std::string parseDNSQueryName(const u_char *data, int &offset);
 
 DNSQuery parseDNSQuery(const u_char *data, int &offset);
@@ -80,6 +93,8 @@ std::string QClassToString(QClass qclass);
 std::ostream &operator<<(std::ostream &os, const DNSQuery &query);
 
 std::ostream &operator<<(std::ostream &os, const DNS &packet);
+
+std::ostream &operator<<(std::ostream &os, const DNSPacket &packet);
 
 #define IS_QTYPE_A(qtype) ((qtype) == QTYPE_A)
 #define IS_QTYPE_NS(qtype) ((qtype) == QTYPE_NS)

@@ -16,9 +16,12 @@ DB::DB() {
     sql::Statement *stmt = con->createStatement();
     stmt->execute("CREATE TABLE IF NOT EXISTS testreg("
                   "id INT PRIMARY KEY AUTO_INCREMENT,"
-                  "name VARCHAR(10),"
-                  "sni TEXT,"
-                  "timestamp TIMESTAMP NOT NULL DEFAULT NOW())");
+                  "timestamp TIMESTAMP NOT NULL DEFAULT NOW(),"
+                  "appname VARCHAR(10),"
+                  "packettype ENUM('DNS', 'TLS'),"
+                  "servername TEXT,"
+                  "ip VARCHAR(15),"
+                  "port SMALLINT UNSIGNED)");
     stmt->execute("CREATE TABLE IF NOT EXISTS test(id INT, label CHAR(1))");
     stmt->execute("INSERT INTO test(id, label) VALUES (1, 'a')");
     sql::PreparedStatement *prep_stmt = con->prepareStatement("INSERT INTO test(id, label) VALUES (?, ?)");
@@ -52,12 +55,37 @@ DB::DB() {
   }
 }
 
-bool DB::insert_servername(std::string appname, std::set<std::string> servernames) {
-  sql::PreparedStatement *pstmt = con->prepareStatement("INSERT INTO testreg (name, sni) VALUES (?, ?)");
+bool DB::insert_dns(std::string appname, std::vector<DNSPacket> dnsPackets) {
+  sql::PreparedStatement *pstmt =
+      con->prepareStatement("INSERT INTO testreg (appname, packettype, servername) VALUES (?, 'DNS', ?)");
   try {
-    for (const auto &servername : servernames) {
+    for (const auto &dnsPacket : dnsPackets) {
       pstmt->setString(1, appname);
-      pstmt->setString(2, servername);
+      pstmt->setString(2, dnsPacket.dns.queries.at(0).name);
+      pstmt->executeUpdate();
+    }
+
+  } catch (sql::SQLException &e) {
+    std::cout << "# ERR: SQLException in " << __FILE__;
+    std::cout << "(" << __FUNCTION__ << ") on line " << __LINE__ << std::endl;
+    std::cout << "# ERR: " << e.what();
+    std::cout << " (MySQL error code: " << e.getErrorCode();
+    std::cout << ", SQLState: " << e.getSQLState() << " )" << std::endl;
+    return false;
+  }
+  delete pstmt;
+  return true;
+}
+
+bool DB::insert_tls(std::string appname, std::vector<TLSPacket> tlsPackets) {
+  sql::PreparedStatement *pstmt = con->prepareStatement(
+      "INSERT INTO testreg (appname, packettype, servername, ip, port) VALUES (?, 'TLS', ?, ?, ?)");
+  try {
+    for (const auto &tlsPacket : tlsPackets) {
+      pstmt->setString(1, appname);
+      pstmt->setString(2, tlsPacket.tls.handshake.value().extensions.at(0).servername.name);
+      pstmt->setString(3, tlsPacket.ip_dst);
+      pstmt->setInt(4, tlsPacket.dport);
       pstmt->executeUpdate();
     }
 

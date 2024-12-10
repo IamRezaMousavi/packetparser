@@ -8,12 +8,14 @@
 #include <netinet/tcp.h>
 #include <netinet/udp.h>
 #include <set>
+#include <vector>
 
-#include "common.hpp"
 #include "db.hpp"
 #include "dns.hpp"
 #include "tls.hpp"
 
+std::vector<DNSPacket> dnsPackets;
+std::vector<TLSPacket> tlsPackets;
 std::set<std::string> servernames;
 
 void packetHandler(u_char *args, const struct pcap_pkthdr *pkthdr, const u_char *packet) {
@@ -30,19 +32,23 @@ void packetHandler(u_char *args, const struct pcap_pkthdr *pkthdr, const u_char 
 
       // Check for TLS handshake content type (0x16)
       if (tcpDataLength > 0 && tcpData[0] == 0x16) { // 0x16 is the content type for TLS Handshake
-        TLS tlsPacket = parseTLS(tcpData);
+        TLS tlsLayer = parseTLS(tcpData);
 
-        TLSPacket packet = {.shost = ether_ntoa((struct ether_addr *)ethHeader->ether_shost),
-                            .dhost = ether_ntoa((struct ether_addr *)ethHeader->ether_dhost),
-                            .ip_src = inet_ntoa(ipHeader->ip_src),
-                            .ip_dst = inet_ntoa(ipHeader->ip_dst),
-                            .sport = ntohs(tcpHeader->th_sport),
-                            .dport = ntohs(tcpHeader->th_dport),
-                            .tls = tlsPacket};
+        TLSPacket tlsPacket = {.shost = ether_ntoa((struct ether_addr *)ethHeader->ether_shost),
+                               .dhost = ether_ntoa((struct ether_addr *)ethHeader->ether_dhost),
+                               .ip_src = inet_ntoa(ipHeader->ip_src),
+                               .ip_dst = inet_ntoa(ipHeader->ip_dst),
+                               .sport = ntohs(tcpHeader->th_sport),
+                               .dport = ntohs(tcpHeader->th_dport),
+                               .tls = tlsLayer};
 
-        std::cout << packet << std::endl;
-        if (packet.tls.handshake.has_value()) {
-          const auto &handshake = packet.tls.handshake.value();
+        if (tlsPacket.tls.handshake.has_value()) {
+          const auto &handshake = tlsPacket.tls.handshake.value();
+          if (handshake.type == TLS_CLIENT_HELLO) {
+            tlsPackets.push_back(tlsPacket);
+            std::cout << tlsPacket << std::endl;
+          }
+
           for (const auto &ext : handshake.extensions) {
             servernames.insert(ext.servername.name);
           }
@@ -54,7 +60,7 @@ void packetHandler(u_char *args, const struct pcap_pkthdr *pkthdr, const u_char 
       const u_char *udpData = packet + sizeof(ether_header) + ipHeader->ip_hl * 4 + sizeof(udphdr);
 
       if (ntohs(udpHeader->uh_sport) == 53 || ntohs(udpHeader->uh_dport) == 53) {
-        DNS packet = parseDNS(udpData);
+        DNS dnsLayer = parseDNS(udpData);
 
         DNSPacket dnsPacket = {.shost = ether_ntoa((struct ether_addr *)ethHeader->ether_shost),
                                .dhost = ether_ntoa((struct ether_addr *)ethHeader->ether_dhost),
@@ -62,9 +68,10 @@ void packetHandler(u_char *args, const struct pcap_pkthdr *pkthdr, const u_char 
                                .ip_dst = inet_ntoa(ipHeader->ip_dst),
                                .sport = ntohs(udpHeader->uh_sport),
                                .dport = ntohs(udpHeader->uh_dport),
-                               .dns = packet};
-
+                               .dns = dnsLayer};
+        dnsPackets.push_back(dnsPacket);
         std::cout << dnsPacket << std::endl;
+
         for (const auto &q : dnsPacket.dns.queries) {
           servernames.insert(q.name);
         }
@@ -94,6 +101,8 @@ int main(int argc, char const *argv[]) {
 
   if (argc == 4) {
     strncpy(filterExpression, argv[3], sizeof(filterExpression) - 1);
+  } else {
+    strncpy(filterExpression, "tcp or udp", sizeof(filterExpression) - 1);
   }
 
   handle = pcap_open_offline(argv[2], errbuf);
@@ -133,7 +142,11 @@ int main(int argc, char const *argv[]) {
     std::cout << servername << std::endl;
   }
 
-  if (!db.insert_servername(argv[1], servernames)) {
+  if (!db.insert_dns(argv[1], dnsPackets)) {
+    std::cout << "DB Insert Error" << std::endl;
+  }
+
+  if (!db.insert_tls(argv[1], tlsPackets)) {
     std::cout << "DB Insert Error" << std::endl;
   }
 

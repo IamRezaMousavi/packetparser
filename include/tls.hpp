@@ -92,6 +92,19 @@ struct TLS {
   std::optional<TLSHandshake> handshake; // Optional handshake data (if contentType is HANDSHAKE)
 };
 
+struct TLSPacket {
+  std::string shost;
+  std::string dhost;
+
+  std::string ip_src;
+  std::string ip_dst;
+
+  uint16_t sport;
+  uint16_t dport;
+
+  TLS tls;
+};
+
 void parseTLSExtensions(const u_char *data, TLSHandshake &tlsHandshake);
 
 void parseTLSClientHello(const u_char *data, TLSHandshake &tlsHandshake);
@@ -107,5 +120,7 @@ const char *TLSHandshakeTypeToString(TLSHandshakeType type);
 const char *TLSExtensionTypeToString(TLSExtensionType type);
 
 std::ostream &operator<<(std::ostream &os, const TLS &packet);
+
+std::ostream &operator<<(std::ostream &os, const TLSPacket &packet);
 
 #endif /* __TLS_HPP__ */

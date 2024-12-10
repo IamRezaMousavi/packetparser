@@ -2,7 +2,7 @@ APP := packet-parser
 
 CC      := g++
 SRC_FMT := cpp
-CFLAGS  := -O0 -g -Iinclude
+CFLAGS  := -O2 -Iinclude
 LDFLAGS += -lpcap
 LDFLAGS += -lmysqlcppconn
 
@@ -15,11 +15,11 @@ DEPS := $(patsubst %.$(SRC_FMT),bin/%.d,$(SRCS))
 all: bin/$(APP)
 
 bin/$(APP): $(OBJS)
-	@$(CC) $(CFLAGS) $^ -o $@ $(LDFLAGS)
+	$(CC) $(CFLAGS) $^ -o $@ $(LDFLAGS)
 
 bin/%.o: %.$(SRC_FMT)
-	@mkdir -p $(dir $@)
-	@$(CC) $(CFLAGS) -MMD -MP -MF $(patsubst %.o,%.d,$@) -MT $@ -c $< -o $@
+	mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -MMD -MP -MF $(patsubst %.o,%.d,$@) -MT $@ -c $< -o $@
 
 clean:
-	@rm -rf bin $(APP)
+	rm -rf bin $(APP)
