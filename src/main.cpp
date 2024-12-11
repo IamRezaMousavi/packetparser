@@ -14,11 +14,12 @@
 #include "dns.hpp"
 #include "tls.hpp"
 
-std::vector<DNSPacket> dnsPackets;
-std::vector<TLSPacket> tlsPackets;
 std::set<std::string> servernames;
 
+DB db;
+
 void packetHandler(u_char *args, const struct pcap_pkthdr *pkthdr, const u_char *packet) {
+  (void)args;
   const struct ether_header *ethHeader = (struct ether_header *)packet;
 
   switch (ntohs(ethHeader->ether_type)) {
@@ -45,7 +46,7 @@ void packetHandler(u_char *args, const struct pcap_pkthdr *pkthdr, const u_char 
         if (tlsPacket.tls.handshake.has_value()) {
           const auto &handshake = tlsPacket.tls.handshake.value();
           if (handshake.type == TLS_CLIENT_HELLO) {
-            tlsPackets.push_back(tlsPacket);
+            db.insert_tls(tlsPacket);
             std::cout << tlsPacket << std::endl;
           }
 
@@ -69,7 +70,7 @@ void packetHandler(u_char *args, const struct pcap_pkthdr *pkthdr, const u_char 
                                .sport = ntohs(udpHeader->uh_sport),
                                .dport = ntohs(udpHeader->uh_dport),
                                .dns = dnsLayer};
-        dnsPackets.push_back(dnsPacket);
+        db.insert_dns(dnsPacket);
         std::cout << dnsPacket << std::endl;
 
         for (const auto &q : dnsPacket.dns.queries) {
@@ -87,31 +88,35 @@ void packetHandler(u_char *args, const struct pcap_pkthdr *pkthdr, const u_char 
 }
 
 int main(int argc, char const *argv[]) {
-  if (argc < 3 || argc > 4) {
-    std::cerr << "Usage " << argv[0] << " <appname> <pacp file> [filter]" << std::endl;
+  if (argc < 4 || argc > 5) {
+    std::cerr << "Usage " << argv[0] << " <'interface' | 'pcap'> <interface | pcapfile> <appname> [filter]"
+              << std::endl;
     return EXIT_FAILURE;
   }
-
-  DB db;
 
   char errbuf[PCAP_ERRBUF_SIZE];
   pcap_t *handle;
   struct bpf_program filter;
   char filterExpression[256] = "";
 
-  if (argc == 4) {
-    strncpy(filterExpression, argv[3], sizeof(filterExpression) - 1);
-  } else {
-    strncpy(filterExpression, "tcp or udp", sizeof(filterExpression) - 1);
+  db.setAppname(argv[3]);
+
+  if (argc == 5) {
+    strncpy(filterExpression, argv[4], sizeof(filterExpression) - 1);
   }
 
-  handle = pcap_open_offline(argv[2], errbuf);
+  if (std::string(argv[1]) == "interface") {
+    handle = pcap_open_live(argv[2], 65536, 1, 0, errbuf);
+  } else {
+    handle = pcap_open_offline(argv[2], errbuf);
+  }
+
   if (handle == nullptr) {
-    std::cerr << "Unable to open file: " << errbuf << std::endl;
+    std::cerr << "Unable to open " << argv[1] << ": " << errbuf << std::endl;
     return EXIT_FAILURE;
   }
 
-  std::cout << "Reading packets from file: " << argv[2] << std::endl;
+  std::cout << "Reading packets from " << argv[1] << ": " << argv[2] << std::endl;
 
   if (strlen(filterExpression) > 0) {
     if (pcap_compile(handle, &filter, filterExpression, 0, PCAP_NETMASK_UNKNOWN) == -1) {
@@ -140,14 +145,6 @@ int main(int argc, char const *argv[]) {
   std::cout << "Servernames:" << std::endl;
   for (const auto &servername : servernames) {
     std::cout << servername << std::endl;
-  }
-
-  if (!db.insert_dns(argv[1], dnsPackets)) {
-    std::cout << "DB Insert Error" << std::endl;
-  }
-
-  if (!db.insert_tls(argv[1], tlsPackets)) {
-    std::cout << "DB Insert Error" << std::endl;
   }
 
   return EXIT_SUCCESS;

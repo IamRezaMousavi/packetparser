@@ -2,7 +2,7 @@ APP := packet-parser
 
 CC      := g++
 SRC_FMT := cpp
-CFLAGS  := -O2 -Iinclude
+CFLAGS  := -O2 -Wall -Wextra -Iinclude
 LDFLAGS += -lpcap
 LDFLAGS += -lmysqlcppconn
 

@@ -5,6 +5,7 @@
 
 #include <cstdbool>
 #include <set>
+#include <string>
 #include <vector>
 
 #include "dns.hpp"
@@ -16,12 +17,19 @@ public:
   DB();
   ~DB();
 
-  bool insert_dns(std::string appname, std::vector<DNSPacket> dnsPackets);
-  bool insert_tls(std::string appname, std::vector<TLSPacket> tlsPackets);
+  bool insert_dnses(std::vector<DNSPacket> dnsPackets);
+  bool insert_tlses(std::vector<TLSPacket> tlsPackets);
+
+  bool insert_dns(DNSPacket dnsPacket);
+  bool insert_tls(TLSPacket tlsPacket);
+
+  void setAppname(std::string appname);
 
 private:
   sql::Driver *driver;
   sql::Connection *con;
+
+  std::string appname;
 };
 
 #endif /* __DB__HPP__ */
