@@ -1,6 +1,6 @@
 # Packet Parser
 
-A Packet Parser
+A packet parser to save SNI, IP and ... in DB
 
 ## Getting started
 

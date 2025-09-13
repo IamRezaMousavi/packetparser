@@ -3,13 +3,10 @@
 
 #include <cppconn/driver.h>
 
-#include <cstdbool>
-#include <set>
 #include <string>
 #include <vector>
 
-#include "dns.hpp"
-#include "tls.hpp"
+#include "packet.hpp"
 
 class DB {
 
@@ -17,11 +14,11 @@ public:
   DB();
   ~DB();
 
-  bool insert_dnses(std::vector<DNSPacket> dnsPackets);
-  bool insert_tlses(std::vector<TLSPacket> tlsPackets);
+  bool insert_dnses(std::vector<Packet> dnsPackets);
+  bool insert_tlses(std::vector<Packet> tlsPackets);
 
-  bool insert_dns(DNSPacket dnsPacket);
-  bool insert_tls(TLSPacket tlsPacket);
+  bool insert_dns(Packet &dnsPacket);
+  bool insert_tls(Packet &tlsPacket);
 
   void setAppname(std::string appname);
 

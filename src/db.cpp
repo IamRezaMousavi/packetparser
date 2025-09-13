@@ -7,6 +7,12 @@
 
 #include <iostream>
 
+#include "dns.hpp"
+#include "ip.hpp"
+#include "tcp.hpp"
+#include "tls.hpp"
+#include "udp.hpp"
+
 DB::DB() {
   try {
     driver = get_driver_instance();
@@ -55,62 +61,34 @@ DB::DB() {
   }
 }
 
-bool DB::insert_dnses(std::vector<DNSPacket> dnsPackets) {
-  sql::PreparedStatement *pstmt = con->prepareStatement(
-      "INSERT INTO testreg (appname, packettype, servername, ip, port) VALUES (?, 'DNS', ?, ?, ?)");
-  try {
-    for (const auto &dnsPacket : dnsPackets) {
-      pstmt->setString(1, this->appname);
-      pstmt->setString(2, dnsPacket.dns.queries.at(0).name);
-      pstmt->setString(3, dnsPacket.ip_dst);
-      pstmt->setInt(4, dnsPacket.dport);
-      pstmt->executeUpdate();
-    }
-
-  } catch (sql::SQLException &e) {
-    std::cout << "# ERR: SQLException in " << __FILE__;
-    std::cout << "(" << __FUNCTION__ << ") on line " << __LINE__ << std::endl;
-    std::cout << "# ERR: " << e.what();
-    std::cout << " (MySQL error code: " << e.getErrorCode();
-    std::cout << ", SQLState: " << e.getSQLState() << " )" << std::endl;
-    return false;
+bool DB::insert_dnses(std::vector<Packet> dnsPackets) {
+  for (auto &dnsPacket : dnsPackets) {
+    insert_dns(dnsPacket);
   }
-  delete pstmt;
   return true;
 }
 
-bool DB::insert_tlses(std::vector<TLSPacket> tlsPackets) {
-  sql::PreparedStatement *pstmt = con->prepareStatement(
-      "INSERT INTO testreg (appname, packettype, servername, ip, port) VALUES (?, 'TLS', ?, ?, ?)");
-  try {
-    for (const auto &tlsPacket : tlsPackets) {
-      pstmt->setString(1, this->appname);
-      pstmt->setString(2, tlsPacket.tls.handshake.value().extensions.at(0).servername.name);
-      pstmt->setString(3, tlsPacket.ip_dst);
-      pstmt->setInt(4, tlsPacket.dport);
-      pstmt->executeUpdate();
-    }
-
-  } catch (sql::SQLException &e) {
-    std::cout << "# ERR: SQLException in " << __FILE__;
-    std::cout << "(" << __FUNCTION__ << ") on line " << __LINE__ << std::endl;
-    std::cout << "# ERR: " << e.what();
-    std::cout << " (MySQL error code: " << e.getErrorCode();
-    std::cout << ", SQLState: " << e.getSQLState() << " )" << std::endl;
-    return false;
+bool DB::insert_tlses(std::vector<Packet> tlsPackets) {
+  for (auto &tlsPacket : tlsPackets) {
+    insert_tls(tlsPacket);
   }
-  delete pstmt;
   return true;
 }
 
-bool DB::insert_dns(DNSPacket dnsPacket) {
+bool DB::insert_dns(Packet &dnsPacket) {
   sql::PreparedStatement *pstmt = con->prepareStatement(
       "INSERT INTO testreg (appname, packettype, servername, ip, port) VALUES (?, 'DNS', ?, ?, ?)");
   try {
     pstmt->setString(1, this->appname);
-    pstmt->setString(2, dnsPacket.dns.queries.at(0).name);
-    pstmt->setString(3, dnsPacket.ip_dst);
-    pstmt->setInt(4, dnsPacket.dport);
+    if (auto dns = dnsPacket.get<DNS>()) {
+      pstmt->setString(2, dns->queries.at(0).name);
+    }
+    if (auto ip = dnsPacket.get<IP>()) {
+      pstmt->setString(3, ip->dst);
+    }
+    if (auto udp = dnsPacket.get<UDP>()) {
+      pstmt->setInt(4, udp->dport);
+    }
     pstmt->executeUpdate();
 
   } catch (sql::SQLException &e) {
@@ -125,14 +103,20 @@ bool DB::insert_dns(DNSPacket dnsPacket) {
   return true;
 }
 
-bool DB::insert_tls(TLSPacket tlsPacket) {
+bool DB::insert_tls(Packet &tlsPacket) {
   sql::PreparedStatement *pstmt = con->prepareStatement(
       "INSERT INTO testreg (appname, packettype, servername, ip, port) VALUES (?, 'TLS', ?, ?, ?)");
   try {
     pstmt->setString(1, this->appname);
-    pstmt->setString(2, tlsPacket.tls.handshake.value().extensions.at(0).servername.name);
-    pstmt->setString(3, tlsPacket.ip_dst);
-    pstmt->setInt(4, tlsPacket.dport);
+    if (auto tls = tlsPacket.get<TLS>()) {
+      pstmt->setString(2, tls->handshake.value().extensions.at(0).servername.name);
+    }
+    if (auto ip = tlsPacket.get<IP>()) {
+      pstmt->setString(3, ip->dst);
+    }
+    if (auto udp = tlsPacket.get<TCP>()) {
+      pstmt->setInt(4, udp->dport);
+    }
     pstmt->executeUpdate();
 
   } catch (sql::SQLException &e) {

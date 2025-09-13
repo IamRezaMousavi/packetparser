@@ -1,85 +1,65 @@
 #include <pcap.h>
 
 #include <cstdlib>
-#include <cstring>
+#include <getopt.h>
 #include <iostream>
 #include <netinet/ether.h>
-#include <netinet/ip.h>
-#include <netinet/tcp.h>
-#include <netinet/udp.h>
-#include <set>
-#include <vector>
+#include <unordered_set>
 
-#include "db.hpp"
-#include "dns.hpp"
-#include "tls.hpp"
+#include "packet.hpp"
+#include "pcap.hpp"
 
-std::set<std::string> servernames;
+std::unordered_set<std::string> servernames;
 
-DB db;
+// DB db;
 
 void packetHandler(u_char *args, const struct pcap_pkthdr *pkthdr, const u_char *packet) {
   (void)args;
-  const struct ether_header *ethHeader = (struct ether_header *)packet;
+  Ether ether(packet, pkthdr->len);
 
-  switch (ntohs(ethHeader->ether_type)) {
+  switch (ether.eth_type) {
   case ETHERTYPE_IP: {
-    const struct ip *ipHeader = (struct ip *)(packet + sizeof(struct ether_header));
+    IP ip(ether.payload(), ether.payloadSize());
 
-    if (ipHeader->ip_p == IPPROTO_TCP) {
-      struct tcphdr *tcpHeader = (struct tcphdr *)(packet + sizeof(struct ether_header) + (ipHeader->ip_hl * 4));
-      const u_char *tcpData = packet + sizeof(ether_header) + (ipHeader->ip_hl * 4) + (tcpHeader->th_off * 4);
-      size_t tcpDataLength = pkthdr->len - (sizeof(ether_header) + (ipHeader->ip_hl * 4) + sizeof(tcphdr));
+    if (ip.protocol == IPPROTO_UDP) {
+      UDP udp(ip.payload(), ip.payloadSize());
+
+      if (udp.sport == 53 || udp.dport == 53) {
+        DNS dns(udp.payload(), udp.payloadSize());
+
+        Packet pkt = ether / ip / udp / dns;
+        std::cout << pkt.toString() << std::endl;
+
+        // db.insert_dns(dnsPacket);
+
+        for (const auto &q : dns.queries) {
+          servernames.insert(q.name);
+        }
+      }
+    } else if (ip.protocol == IPPROTO_TCP) {
+      TCP tcp(ip.payload(), ip.payloadSize());
 
       // Check for TLS handshake content type (0x16)
-      if (tcpDataLength > 0 && tcpData[0] == 0x16) { // 0x16 is the content type for TLS Handshake
-        TLS tlsLayer = parseTLS(tcpData);
-
-        TLSPacket tlsPacket = {.shost = ether_ntoa((struct ether_addr *)ethHeader->ether_shost),
-                               .dhost = ether_ntoa((struct ether_addr *)ethHeader->ether_dhost),
-                               .ip_src = inet_ntoa(ipHeader->ip_src),
-                               .ip_dst = inet_ntoa(ipHeader->ip_dst),
-                               .sport = ntohs(tcpHeader->th_sport),
-                               .dport = ntohs(tcpHeader->th_dport),
-                               .tls = tlsLayer};
-
-        if (tlsPacket.tls.handshake.has_value()) {
-          const auto &handshake = tlsPacket.tls.handshake.value();
-          if (handshake.type == TLS_CLIENT_HELLO) {
-            db.insert_tls(tlsPacket);
-            std::cout << tlsPacket << std::endl;
+      // 0x16 is the content type for TLS Handshake
+      if (tcp.payloadSize() > 0 && tcp.payload()[0] == 0x16) {
+        TLS tls(tcp.payload(), tcp.payloadSize());
+        if (tls.handshake.has_value()) {
+          const auto &handshake = tls.handshake.value();
+          if (handshake.type == TLSHandshakeType::TLS_CLIENT_HELLO) {
+            Packet pkt = ether / ip / tcp / tls;
+            std::cout << pkt.toString() << std::endl;
           }
-
           for (const auto &ext : handshake.extensions) {
             servernames.insert(ext.servername.name);
           }
         }
       }
-
-    } else if (ipHeader->ip_p == IPPROTO_UDP) {
-      const struct udphdr *udpHeader = (struct udphdr *)(packet + sizeof(struct ether_header) + (ipHeader->ip_hl * 4));
-      const u_char *udpData = packet + sizeof(ether_header) + ipHeader->ip_hl * 4 + sizeof(udphdr);
-
-      if (ntohs(udpHeader->uh_sport) == 53 || ntohs(udpHeader->uh_dport) == 53) {
-        DNS dnsLayer = parseDNS(udpData);
-
-        DNSPacket dnsPacket = {.shost = ether_ntoa((struct ether_addr *)ethHeader->ether_shost),
-                               .dhost = ether_ntoa((struct ether_addr *)ethHeader->ether_dhost),
-                               .ip_src = inet_ntoa(ipHeader->ip_src),
-                               .ip_dst = inet_ntoa(ipHeader->ip_dst),
-                               .sport = ntohs(udpHeader->uh_sport),
-                               .dport = ntohs(udpHeader->uh_dport),
-                               .dns = dnsLayer};
-        db.insert_dns(dnsPacket);
-        std::cout << dnsPacket << std::endl;
-
-        for (const auto &q : dnsPacket.dns.queries) {
-          servernames.insert(q.name);
-        }
-      }
     }
 
     break;
+  }
+
+  case ETHERTYPE_IPV6: {
   }
 
   default:
@@ -87,62 +67,67 @@ void packetHandler(u_char *args, const struct pcap_pkthdr *pkthdr, const u_char 
   }
 }
 
-int main(int argc, char const *argv[]) {
-  if (argc < 4 || argc > 5) {
-    std::cerr << "Usage " << argv[0] << " <'interface' | 'pcap'> <interface | pcapfile> <appname> [filter]"
-              << std::endl;
-    return EXIT_FAILURE;
-  }
+struct Cli {
+  std::string source;
+  std::string appname;
+  std::optional<std::string> filter;
+  bool debug;
+} cli;
 
-  char errbuf[PCAP_ERRBUF_SIZE];
-  pcap_t *handle;
-  struct bpf_program filter;
-  char filterExpression[256] = "";
+void usage(const char *progname) {
+  std::cerr << "Usage: " << progname << " -s <src> -a <appname> [-f filter] [-d]\n\n"
+            << "Options:\n"
+            << "  -s <src>        Source (e.g., eth0 or file.pcap)\n"
+            << "  -a <appname>    Application name\n"
+            << "  -f <filter>     Filter string (Optional)\n"
+            << "  -d              Enable debug prints (Optional)\n"
+            << "  -h              Show this help message\n";
+}
 
-  db.setAppname(argv[3]);
-
-  if (argc == 5) {
-    strncpy(filterExpression, argv[4], sizeof(filterExpression) - 1);
-  }
-
-  if (std::string(argv[1]) == "interface") {
-    handle = pcap_open_live(argv[2], 65536, 1, 0, errbuf);
-  } else {
-    handle = pcap_open_offline(argv[2], errbuf);
-  }
-
-  if (handle == nullptr) {
-    std::cerr << "Unable to open " << argv[1] << ": " << errbuf << std::endl;
-    return EXIT_FAILURE;
-  }
-
-  std::cout << "Reading packets from " << argv[1] << ": " << argv[2] << std::endl;
-
-  if (strlen(filterExpression) > 0) {
-    if (pcap_compile(handle, &filter, filterExpression, 0, PCAP_NETMASK_UNKNOWN) == -1) {
-      std::cerr << "Error compiling filter: " << pcap_geterr(handle) << std::endl;
-      pcap_close(handle);
-      return EXIT_FAILURE;
+void cli_parser(int argc, char *argv[]) {
+  int opt;
+  while ((opt = getopt(argc, argv, "m:s:a:f:hd")) != -1) {
+    switch (opt) {
+    case 's':
+      cli.source = optarg;
+      break;
+    case 'a':
+      cli.appname = optarg;
+      break;
+    case 'f':
+      cli.filter = optarg;
+      break;
+    case 'h':
+      usage(argv[0]);
+      exit(EXIT_SUCCESS);
+    case 'd':
+      cli.debug = true;
+      break;
+    default:
+      usage(argv[0]);
+      exit(EXIT_FAILURE);
     }
-
-    if (pcap_setfilter(handle, &filter) == -1) {
-      std::cerr << "Error setting filter: " << pcap_geterr(handle) << std::endl;
-      pcap_freecode(&filter);
-      pcap_close(handle);
-      return EXIT_FAILURE;
-    }
-
-    std::cout << "Filter applied: " << filterExpression << std::endl;
   }
 
-  pcap_loop(handle, 0, packetHandler, nullptr);
-
-  if (strlen(filterExpression) > 0) {
-    pcap_freecode(&filter);
+  if (cli.source.empty() || cli.appname.empty()) {
+    std::cerr << "Missing required arguments\n\n";
+    usage(argv[0]);
+    exit(EXIT_FAILURE);
   }
-  pcap_close(handle);
+}
 
-  std::cout << "Servernames:" << std::endl;
+int main(int argc, char *argv[]) {
+  cli_parser(argc, argv);
+
+  PcapWrapper pcap(cli.source, cli.filter);
+  std::cout << "Reading packets from " << cli.source << ": " << cli.appname << std::endl;
+
+  pcap.loop(packetHandler);
+
+  if (!servernames.empty()) {
+    std::cout << "Servernames:" << std::endl;
+  }
+
   for (const auto &servername : servernames) {
     std::cout << servername << std::endl;
   }

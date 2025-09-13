@@ -1,25 +1,54 @@
-APP := packet-parser
+PROJECT := packet-parser
 
-CC      := g++
-SRC_FMT := cpp
-CFLAGS  := -O2 -Wall -Wextra -Iinclude
-LDFLAGS += -lpcap
-LDFLAGS += -lmysqlcppconn
+CC       := cc
+CCX      := c++
+CFLAGS   := -O2 -Wall -Wextra -I./include
+CXXFLAGS := $(CFLAGS) -std=c++20
+LDFLAGS  :=
+LIBS     := -lpcap -lmysqlcppconn
 
-SRC_DIRS := src
+SRC_DIR   := src
+INC_DIR   := include
+BUILD_DIR := build
 
-SRCS := $(foreach dir,$(SRC_DIRS),$(wildcard $(dir)/*.$(SRC_FMT)))
-OBJS := $(patsubst %.$(SRC_FMT),bin/%.o,$(SRCS))
-DEPS := $(patsubst %.$(SRC_FMT),bin/%.d,$(SRCS))
+TARGETS := $(BUILD_DIR)/$(PROJECT)
 
-all: bin/$(APP)
+C_SRCS   := $(wildcard $(SRC_DIR)/*.c)
+CPP_SRCS := $(wildcard $(SRC_DIR)/*.cpp)
+HDRS     := $(wildcard $(INC_DIR)/*.h $(INC_DIR)/*.hpp)
 
-bin/$(APP): $(OBJS)
-	$(CC) $(CFLAGS) $^ -o $@ $(LDFLAGS)
+C_OBJS   := $(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/%.o,$(C_SRCS))
+CPP_OBJS := $(patsubst $(SRC_DIR)/%.cpp,$(BUILD_DIR)/%.o,$(CPP_SRCS))
+OBJS     := $(C_OBJS) $(CPP_OBJS)
 
-bin/%.o: %.$(SRC_FMT)
-	mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) -MMD -MP -MF $(patsubst %.o,%.d,$@) -MT $@ -c $< -o $@
+C_DEPS   := $(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/%.d,$(C_SRCS))
+CPP_DEPS := $(patsubst $(SRC_DIR)/%.cpp,$(BUILD_DIR)/%.d,$(CPP_SRCS))
+DEPS     := $(C_DEPS) $(CPP_DEPS)
+
+Q := @
+E := $(Q)echo
+
+all: prepare $(TARGETS)
+
+prepare:
+	$(Q) mkdir -p $(BUILD_DIR)
+
+$(TARGETS): $(OBJS)
+	$(E) "  LINK     " $@
+	$(Q) $(CCX) $(CFLAGS) $^ -o $@ $(LDFLAGS) $(LIBS)
+
+$(BUILD_DIR)/%.o: $(SRC_DIR)/%.c
+	$(E) "  CC       " $<
+	$(Q) $(CC) $(CFLAGS) -MMD -MP -MF $(patsubst %.o,%.d,$@) -MT $@ -c $< -o $@
+
+$(BUILD_DIR)/%.o: $(SRC_DIR)/%.cpp
+	$(E) "  CCX      " $<
+	$(Q) $(CXX) $(CXXFLAGS) -MMD -MP -MF $(patsubst %.o,%.d,$@) -MT $@ -c $< -o $@
 
 clean:
-	rm -rf bin $(APP)
+	$(E) "  CLEAN"
+	$(Q) rm -rf $(BUILD_DIR)
+
+-include $(DEPS)
+
+.PHONY: all prepare clean

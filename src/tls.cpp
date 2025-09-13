@@ -1,15 +1,81 @@
 #include "tls.hpp"
 
-void parseTLSExtensions(const u_char *data, TLSHandshake &tlsHandshake) {
+#include <iomanip>
+#include <iostream>
+#include <sstream>
+
+#include "utils.hpp"
+
+TLS::TLS(const uint8_t *data, size_t totalLength) {
+  UNUSED(totalLength);
+
+  contentType = static_cast<TLSContentType>(data[0]);
+  version = static_cast<TLSVersion>((data[1] << 8) | data[2]);
+  len = (data[3] << 8) | data[4];
+
+  if (contentType == TLSContentType::TLS_CTYPE_HANDSHAKE) {
+    const uint8_t *handshakeData = data + 5;
+    TLSHandshake handshake;
+    handshake.type = static_cast<TLSHandshakeType>(handshakeData[0]);
+    handshake.len = (handshakeData[1] << 16) | (handshakeData[2] << 8) | handshakeData[3];
+
+    switch (handshake.type) {
+    case TLSHandshakeType::TLS_CLIENT_HELLO:
+      handshake.parseTLSClientHello(data + 9);
+      break;
+
+    default:
+      break;
+    }
+
+    handshake = handshake;
+  }
+}
+
+void TLSHandshake::parseTLSClientHello(const uint8_t *data) {
   size_t offset = 0;
-  for (size_t i = 0; i < tlsHandshake.extensionsLen; i++) {
+  version = (data[offset] << 8) | data[offset + 1];
+  offset += 2;
+
+  random.assign(data + offset, data + offset + 32);
+  offset += 32;
+
+  sessionId.name = "session id";
+  sessionId.len = data[offset++];
+  sessionId.data.assign(data + offset, data + offset + sessionId.len);
+  offset += sessionId.len;
+
+  TLSTuple cipherSuits;
+  cipherSuits.name = "cipher suits";
+  cipherSuits.len = (data[offset] << 8) | data[offset + 1];
+  offset += 2;
+  cipherSuits.data.assign(data + offset, data + offset + cipherSuits.len);
+  cipherSuits = cipherSuits;
+  offset += cipherSuits.len;
+
+  TLSTuple compressionMethods;
+  compressionMethods.name = "compression methods";
+  compressionMethods.len = data[offset++];
+  compressionMethods.data.assign(data + offset, data + offset + compressionMethods.len);
+  compressionMethods = compressionMethods;
+  offset += compressionMethods.len;
+
+  extensionsLen = (data[offset] << 8) | data[offset + 1];
+  offset += 2;
+
+  parseTLSExtensions(data + offset);
+}
+
+void TLSHandshake::parseTLSExtensions(const uint8_t *data) {
+  size_t offset = 0;
+  for (size_t i = 0; i < extensionsLen; i++) {
     TLSExtension extension;
-    extension.type = (data[offset] << 8) | data[offset + 1];
+    extension.type = static_cast<TLSExtensionType>((data[offset] << 8) | data[offset + 1]);
     offset += 2;
     extension.len = (data[offset] << 8) | data[offset + 1];
     offset += 2;
 
-    if (extension.type == TLS_EXT_SERVERNAME) {
+    if (extension.type == TLSExtensionType::TLS_EXT_SERVERNAME) {
       TLSExtensionServerName servername;
       servername.listLen = (data[offset] << 8) | data[offset + 1];
       offset += 2;
@@ -18,199 +84,120 @@ void parseTLSExtensions(const u_char *data, TLSHandshake &tlsHandshake) {
       offset += 2;
       servername.name = std::string(data + offset, data + offset + servername.len);
       extension.servername = servername;
-      tlsHandshake.extensions.push_back(extension);
-      return;
+      extensions.push_back(extension);
     }
   }
 }
 
-void parseTLSClientHello(const u_char *data, TLSHandshake &tlsHandshake) {
-  size_t offset = 0;
-  tlsHandshake.version = (data[offset] << 8) | data[offset + 1];
-  offset += 2;
-
-  tlsHandshake.random.assign(data + offset, data + offset + 32);
-  offset += 32;
-
-  tlsHandshake.sessionId.name = "session id";
-  tlsHandshake.sessionId.len = data[offset++];
-  tlsHandshake.sessionId.data.assign(data + offset, data + offset + tlsHandshake.sessionId.len);
-  offset += tlsHandshake.sessionId.len;
-
-  TLSTuple cipherSuits;
-  cipherSuits.name = "cipher suits";
-  cipherSuits.len = (data[offset] << 8) | data[offset + 1];
-  offset += 2;
-  cipherSuits.data.assign(data + offset, data + offset + cipherSuits.len);
-  tlsHandshake.cipherSuits = cipherSuits;
-  offset += cipherSuits.len;
-
-  TLSTuple compressionMethods;
-  compressionMethods.name = "compression methods";
-  compressionMethods.len = data[offset++];
-  compressionMethods.data.assign(data + offset, data + offset + compressionMethods.len);
-  tlsHandshake.compressionMethods = compressionMethods;
-  offset += compressionMethods.len;
-
-  tlsHandshake.extensionsLen = (data[offset] << 8) | data[offset + 1];
-  offset += 2;
-
-  parseTLSExtensions(data + offset, tlsHandshake);
-}
-
-TLS parseTLS(const u_char *data) {
-  TLS packet;
-  packet.contentType = data[0];
-  packet.version = (data[1] << 8) | data[2];
-  packet.len = (data[3] << 8) | data[4];
-
-  if (packet.contentType == TLS_CTYPE_HANDSHAKE) {
-    TLSHandshake handshake;
-    const uint8_t *handshakeData = data + 5;
-    handshake.type = handshakeData[0];
-    handshake.len = (handshakeData[1] << 16) | (handshakeData[2] << 8) | handshakeData[3];
-
-    switch (handshake.type) {
-    case TLS_CLIENT_HELLO:
-      parseTLSClientHello(data + 9, handshake);
-      break;
-
-    default:
-      break;
-    }
-
-    packet.handshake = handshake;
-  }
-
-  return packet;
-}
-
-const char *TLSContentTypeToString(TLSContentType contentType) {
+std::string TLS::toString(const TLSContentType contentType) const {
   switch (contentType) {
-  case TLS_CTYPE_ALERT:
+  case TLSContentType::TLS_CTYPE_ALERT:
     return "Alert";
-  case TLS_CTYPE_HANDSHAKE:
+  case TLSContentType::TLS_CTYPE_HANDSHAKE:
     return "Handshake";
-  case TLS_CTYPE_APPLICATION_DATA:
+  case TLSContentType::TLS_CTYPE_APPLICATION_DATA:
     return "APPLICATION_DATA";
-  case TLS_CTYPE_HEARTBEAT:
+  case TLSContentType::TLS_CTYPE_HEARTBEAT:
     return "HEARTBEAT";
   default:
     return "UNKNOWN";
   }
 }
 
-const char *TLSVersionToString(TLSVersion version) {
+std::string TLS::toString(TLSVersion version) const {
   switch (version) {
-  case TLS_1_0:
+  case TLSVersion::TLS_1_0:
     return "TLS 1.0";
-  case TLS_1_1:
+  case TLSVersion::TLS_1_1:
     return "TLS 1.1";
-  case TLS_1_2:
+  case TLSVersion::TLS_1_2:
     return "TLS 1.2";
-  case TLS_1_3:
+  case TLSVersion::TLS_1_3:
     return "TLS 1.3";
   default:
     return "UNKNOWN";
   }
 }
 
-const char *TLSHandshakeTypeToString(TLSHandshakeType type) {
+std::string TLSHandshake::toString(TLSHandshakeType type) const {
   switch (type) {
-  case TLS_HELLO_REQ:
+  case TLSHandshakeType::TLS_HELLO_REQ:
     return "Hello Request";
-  case TLS_CLIENT_HELLO:
+  case TLSHandshakeType::TLS_CLIENT_HELLO:
     return "Client Hello";
-  case TLS_SERVER_HELLO:
+  case TLSHandshakeType::TLS_SERVER_HELLO:
     return "Server Hello";
-  case TLS_NEW_TICKET:
+  case TLSHandshakeType::TLS_NEW_TICKET:
     return "New Ticket";
-  case TLS_END_OF_EARLY_DATA:
+  case TLSHandshakeType::TLS_END_OF_EARLY_DATA:
     return "End Of Early Data";
-  case TLS_CERT:
+  case TLSHandshakeType::TLS_CERT:
     return "Certidicate";
-  case TLS_SERVER_KEY_EXCH:
+  case TLSHandshakeType::TLS_SERVER_KEY_EXCH:
     return "Server Key Exchange";
-  case TLS_SERVER_HELLO_DONE:
+  case TLSHandshakeType::TLS_SERVER_HELLO_DONE:
     return "Server Hello Done";
-  case TLS_CERT_REQ:
+  case TLSHandshakeType::TLS_CERT_REQ:
     return "Certificate Request";
-  case TLS_CLIENT_KEY_EXCH:
+  case TLSHandshakeType::TLS_CLIENT_KEY_EXCH:
     return "Client Key Exchange";
-  case TLS_FINISHED:
+  case TLSHandshakeType::TLS_FINISHED:
     return "Finished";
-  case TLS_CERT_STATUS:
+  case TLSHandshakeType::TLS_CERT_STATUS:
     return "Certification Status";
   default:
     return "UNKNOWN";
   }
 }
 
-const char *TLSExtensionTypeToString(TLSExtensionType type) {
+std::string TLSExtension::toString(TLSExtensionType type) const {
   switch (type) {
-  case TLS_EXT_SERVERNAME:
+  case TLSExtensionType::TLS_EXT_SERVERNAME:
     return "Server Name";
-  case TLS_EXT_SUPPORTED_VERS:
+  case TLSExtensionType::TLS_EXT_SUPPORTED_VERS:
     return "Supported Vers";
-  case TLS_EXT_PADDING:
+  case TLSExtensionType::TLS_EXT_PADDING:
     return "Padding";
   default:
     return "UNKNOWN";
   }
 }
 
-std::ostream &operator<<(std::ostream &os, const TLS &packet) {
-  os << "|                 TLS                  |" << std::endl;
-  os << "+------------------+-------------------+" << std::endl;
-  os << "|     Content Type | " << std::left << std::setw(17)
-     << TLSContentTypeToString((TLSContentType)packet.contentType) << " |" << std::endl;
-  os << "|          Version | " << std::left << std::setw(17) << TLSVersionToString((TLSVersion)packet.version) << " |"
-     << std::endl;
-  os << "|           Length | " << std::left << std::setw(17) << packet.len << " |" << std::endl;
-  os << "+------------------+-------------------+" << std::endl;
-  os << "|              Handshake               |" << std::endl;
-  os << "+------------------+-------------------+" << std::endl;
-  // If the packet contains handshake data, output it
-  if (packet.handshake.has_value()) {
-    const auto &handshake = packet.handshake.value();
-    os << "|   Handshake Type | " << std::left << std::setw(17)
-       << TLSHandshakeTypeToString((TLSHandshakeType)handshake.type) << " |" << std::endl;
-    os << "| Handshake Length | " << std::left << std::setw(17) << handshake.len << " |" << std::endl;
-    os << "+------------------+-------------------+" << std::endl;
+std::unique_ptr<Layer> TLS::clone() const { return std::make_unique<TLS>(*this); }
 
-    if (!handshake.extensions.empty()) {
-      os << "+------------------+-------------------+" << std::endl;
-      os << "|             Extensions               |" << std::endl;
-      os << "+------------------+-------------------+" << std::endl;
+std::string TLS::toString() const {
+  std::ostringstream ss;
+  ss << "|                 TLS                  |\n";
+  ss << "+------------------+-------------------+\n";
+  ss << "|     Content Type | " << std::left << std::setw(17) << toString(contentType) << " |\n";
+  ss << "|          Version | " << std::left << std::setw(17) << toString(version) << " |\n";
+  ss << "|           Length | " << std::left << std::setw(17) << len << " |\n";
+  ss << "+------------------+-------------------+\n";
+  ss << "|              Handshake               |\n";
+  ss << "+------------------+-------------------+\n";
+  // If the packet contains handshake data, output it
+  if (handshake.has_value()) {
+    const auto &_handshake = handshake.value();
+    ss << "|   Handshake Type | " << std::left << std::setw(17) << _handshake.toString(_handshake.type) << " |\n";
+    ss << "| Handshake Length | " << std::left << std::setw(17) << _handshake.len << " |\n";
+    ss << "+------------------+-------------------+\n";
+
+    if (!_handshake.extensions.empty()) {
+      ss << "+------------------+-------------------+\n";
+      ss << "|             Extensions               |\n";
+      ss << "+------------------+-------------------+\n";
     }
-    for (const auto &ext : handshake.extensions) {
-      os << "|             Type | " << std::left << std::setw(17)
-         << TLSExtensionTypeToString((TLSExtensionType)ext.type) << " |" << std::endl;
-      os << "|     SNI Hostname | " << ext.servername.name << std::endl;
-      os << "+------------------+-------------------+" << std::endl;
+    for (const auto &ext : _handshake.extensions) {
+      ss << "|             Type | " << std::left << std::setw(17) << ext.toString(ext.type) << " |\n";
+      ss << "|     SNI Hostname | " << ext.servername.name << '\n';
+      ss << "+------------------+-------------------+\n";
     }
   }
 
-  return os;
+  return ss.str();
 }
 
-std::ostream &operator<<(std::ostream &os, const TLSPacket &packet) {
-  os << std::endl << std::endl;
-  os << "+------------------+-------------------+" << std::endl;
-  os << "|              TLS Packet              |" << std::endl;
-  os << "+------------------+-------------------+" << std::endl;
-  os << "| Source MAC       | " << std::left << std::setw(17) << packet.shost << " |" << std::endl;
-  os << "| Dest MAC         | " << std::left << std::setw(17) << packet.dhost << " |" << std::endl;
-  os << "+------------------+-------------------+" << std::endl;
-  os << "| Source IP        | " << std::left << std::setw(17) << packet.ip_src << " |" << std::endl;
-  os << "| Dest IP          | " << std::left << std::setw(17) << packet.ip_dst << " |" << std::endl;
-  os << "+------------------+-------------------+" << std::endl;
-  os << "| Source Port      | " << std::left << std::setw(17) << packet.sport << " |" << std::endl;
-  os << "| Dest Port        | " << std::left << std::setw(17) << packet.dport << " |" << std::endl;
-  os << "+------------------+-------------------+" << std::endl;
-
-  os << packet.tls;
-  os << std::endl << std::endl;
-
+std::ostream &operator<<(std::ostream &os, const TLS &tls) {
+  os << tls.toString();
   return os;
 }
