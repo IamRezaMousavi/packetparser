@@ -1,4 +1,4 @@
-PROJECT := packet-parser
+PROJECT := packetparser
 
 CC       := cc
 CCX      := c++
