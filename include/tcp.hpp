@@ -5,8 +5,8 @@
 
 class TCP : public Layer {
 public:
-  uint16_t sport;
-  uint16_t dport;
+  uint16_t sport; /**< source port. */
+  uint16_t dport; /**< destination port. */
 
   TCP() = default;
   TCP(const TCP &) = default;

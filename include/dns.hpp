@@ -28,7 +28,13 @@ public:
   std::string toString() const;
 
 private:
+  /**
+   * parse dns query name from binary data.
+   * @param data pointer to binary data.
+   * @param offset start offset from data pointer.
+   */
   std::string parseDNSQueryName(const u_char *data, int &offset);
+
   std::string toString(QType type) const;
   std::string toString(QClass qclass) const;
 };

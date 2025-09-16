@@ -5,9 +5,9 @@
 
 class Ether : public Layer {
 public:
-  std::string shost;
-  std::string dhost;
-  uint16_t eth_type;
+  std::string shost; /**< source mac address host. */
+  std::string dhost; /**< destination mac address host. */
+  uint16_t eth_type; /**< packet ethernet type. */
 
   Ether() = default;
   Ether(const Ether &) = default;

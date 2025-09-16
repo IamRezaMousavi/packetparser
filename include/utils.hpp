@@ -7,6 +7,10 @@
 
 #define UNUSED(x) (void)(x)
 
+/**
+ * Helper function to show error and exit.
+ * @param msg error message to show.
+ */
 inline void panic(std::string msg) {
   std::cerr << msg << std::endl;
   exit(EXIT_FAILURE);
