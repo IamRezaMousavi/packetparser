@@ -1,14 +1,15 @@
 #include "udp.hpp"
 
 #include <arpa/inet.h>
-#include <iomanip>
 #include <netinet/udp.h>
+
+#include <iomanip>
 #include <sstream>
 
 UDP::UDP(const uint8_t *data, size_t totalLength) {
   const struct udphdr *udp = (const struct udphdr *)data;
-  sport = ntohs(udp->uh_sport);
-  dport = ntohs(udp->uh_dport);
+  sport                    = ntohs(udp->uh_sport);
+  dport                    = ntohs(udp->uh_dport);
 
   payloadPtr = data + sizeof(struct udphdr);
   payloadLen = totalLength > sizeof(struct udphdr) ? totalLength - sizeof(struct udphdr) : 0;

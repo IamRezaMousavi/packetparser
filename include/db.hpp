@@ -49,7 +49,7 @@ public:
   void setAppname(std::string appname);
 
 private:
-  sql::Driver *driver;
+  sql::Driver     *driver;
   sql::Connection *con;
 
   std::string appname;

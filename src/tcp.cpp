@@ -1,14 +1,15 @@
 #include "tcp.hpp"
 
 #include <arpa/inet.h>
-#include <iomanip>
 #include <netinet/tcp.h>
+
+#include <iomanip>
 #include <sstream>
 
 TCP::TCP(const uint8_t *data, size_t totalLength) {
   const struct tcphdr *tcp = (const struct tcphdr *)data;
-  sport = ntohs(tcp->th_sport);
-  dport = ntohs(tcp->th_dport);
+  sport                    = ntohs(tcp->th_sport);
+  dport                    = ntohs(tcp->th_dport);
 
   payloadPtr = data + sizeof(struct tcphdr);
   payloadLen = totalLength > sizeof(struct tcphdr) ? totalLength - sizeof(struct tcphdr) : 0;

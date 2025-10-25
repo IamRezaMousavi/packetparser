@@ -1,9 +1,9 @@
+#include <getopt.h>
+#include <netinet/ether.h>
 #include <pcap.h>
 
 #include <cstdlib>
-#include <getopt.h>
 #include <iostream>
-#include <netinet/ether.h>
 #include <unordered_set>
 
 #include "packet.hpp"
@@ -68,10 +68,10 @@ void packetHandler(u_char *args, const struct pcap_pkthdr *pkthdr, const u_char 
 }
 
 struct Cli {
-  std::string source;
-  std::string appname;
+  std::string                source;
+  std::string                appname;
   std::optional<std::string> filter;
-  bool debug;
+  bool                       debug;
 } cli;
 
 void usage(const char *progname) {

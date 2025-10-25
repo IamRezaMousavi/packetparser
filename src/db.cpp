@@ -16,18 +16,20 @@
 DB::DB() {
   try {
     driver = get_driver_instance();
-    con = driver->connect("tcp://192.168.108.133:3306", "root", "1qaz!QAZ");
+    con    = driver->connect("tcp://192.168.108.133:3306", "root", "1qaz!QAZ");
     con->setSchema("reza_log");
 
     sql::Statement *stmt = con->createStatement();
-    stmt->execute("CREATE TABLE IF NOT EXISTS testreg("
-                  "id INT PRIMARY KEY AUTO_INCREMENT,"
-                  "timestamp TIMESTAMP NOT NULL DEFAULT NOW(),"
-                  "appname VARCHAR(10),"
-                  "packettype ENUM('DNS', 'TLS'),"
-                  "servername TEXT,"
-                  "ip VARCHAR(15),"
-                  "port SMALLINT UNSIGNED)");
+    stmt->execute(
+        "CREATE TABLE IF NOT EXISTS testreg("
+        "id INT PRIMARY KEY AUTO_INCREMENT,"
+        "timestamp TIMESTAMP NOT NULL DEFAULT NOW(),"
+        "appname VARCHAR(10),"
+        "packettype ENUM('DNS', 'TLS'),"
+        "servername TEXT,"
+        "ip VARCHAR(15),"
+        "port SMALLINT UNSIGNED)"
+    );
     stmt->execute("CREATE TABLE IF NOT EXISTS test(id INT, label CHAR(1))");
     stmt->execute("INSERT INTO test(id, label) VALUES (1, 'a')");
     sql::PreparedStatement *prep_stmt = con->prepareStatement("INSERT INTO test(id, label) VALUES (?, ?)");
@@ -52,7 +54,6 @@ DB::DB() {
     delete stmt;
 
   } catch (sql::SQLException &e) {
-
     std::cout << "# ERR: SQLException in " << __FILE__;
     std::cout << "(" << __FUNCTION__ << ") on line " << __LINE__ << std::endl;
     std::cout << "# ERR: " << e.what();
@@ -77,7 +78,8 @@ bool DB::insert_tlses(std::vector<Packet> tlsPackets) {
 
 bool DB::insert_dns(Packet &dnsPacket) {
   sql::PreparedStatement *pstmt = con->prepareStatement(
-      "INSERT INTO testreg (appname, packettype, servername, ip, port) VALUES (?, 'DNS', ?, ?, ?)");
+      "INSERT INTO testreg (appname, packettype, servername, ip, port) VALUES (?, 'DNS', ?, ?, ?)"
+  );
   try {
     pstmt->setString(1, this->appname);
     if (auto dns = dnsPacket.get<DNS>()) {
@@ -105,7 +107,8 @@ bool DB::insert_dns(Packet &dnsPacket) {
 
 bool DB::insert_tls(Packet &tlsPacket) {
   sql::PreparedStatement *pstmt = con->prepareStatement(
-      "INSERT INTO testreg (appname, packettype, servername, ip, port) VALUES (?, 'TLS', ?, ?, ?)");
+      "INSERT INTO testreg (appname, packettype, servername, ip, port) VALUES (?, 'TLS', ?, ?, ?)"
+  );
   try {
     pstmt->setString(1, this->appname);
     if (auto tls = tlsPacket.get<TLS>()) {

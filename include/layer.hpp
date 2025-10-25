@@ -42,7 +42,7 @@ public:
 
 protected:
   const uint8_t *payloadPtr = nullptr;
-  size_t payloadLen = 0;
+  size_t         payloadLen = 0;
 };
 
 #endif /* __LAYER_HPP__ */

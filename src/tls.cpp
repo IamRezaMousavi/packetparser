@@ -10,14 +10,14 @@ TLS::TLS(const uint8_t *data, size_t totalLength) {
   UNUSED(totalLength);
 
   contentType = static_cast<TLSContentType>(data[0]);
-  version = static_cast<TLSVersion>((data[1] << 8) | data[2]);
-  len = (data[3] << 8) | data[4];
+  version     = static_cast<TLSVersion>((data[1] << 8) | data[2]);
+  len         = (data[3] << 8) | data[4];
 
   if (contentType == TLSContentType::TLS_CTYPE_HANDSHAKE) {
     const uint8_t *handshakeData = data + 5;
-    TLSHandshake handshake;
+    TLSHandshake   handshake;
     handshake.type = static_cast<TLSHandshakeType>(handshakeData[0]);
-    handshake.len = (handshakeData[1] << 16) | (handshakeData[2] << 8) | handshakeData[3];
+    handshake.len  = (handshakeData[1] << 16) | (handshakeData[2] << 8) | handshakeData[3];
 
     switch (handshake.type) {
     case TLSHandshakeType::TLS_CLIENT_HELLO:
@@ -34,20 +34,20 @@ TLS::TLS(const uint8_t *data, size_t totalLength) {
 
 void TLSHandshake::parseTLSClientHello(const uint8_t *data) {
   size_t offset = 0;
-  version = (data[offset] << 8) | data[offset + 1];
+  version       = (data[offset] << 8) | data[offset + 1];
   offset += 2;
 
   random.assign(data + offset, data + offset + 32);
   offset += 32;
 
   sessionId.name = "session id";
-  sessionId.len = data[offset++];
+  sessionId.len  = data[offset++];
   sessionId.data.assign(data + offset, data + offset + sessionId.len);
   offset += sessionId.len;
 
   TLSTuple cipherSuits;
   cipherSuits.name = "cipher suits";
-  cipherSuits.len = (data[offset] << 8) | data[offset + 1];
+  cipherSuits.len  = (data[offset] << 8) | data[offset + 1];
   offset += 2;
   cipherSuits.data.assign(data + offset, data + offset + cipherSuits.len);
   cipherSuits = cipherSuits;
@@ -55,7 +55,7 @@ void TLSHandshake::parseTLSClientHello(const uint8_t *data) {
 
   TLSTuple compressionMethods;
   compressionMethods.name = "compression methods";
-  compressionMethods.len = data[offset++];
+  compressionMethods.len  = data[offset++];
   compressionMethods.data.assign(data + offset, data + offset + compressionMethods.len);
   compressionMethods = compressionMethods;
   offset += compressionMethods.len;
@@ -80,9 +80,9 @@ void TLSHandshake::parseTLSExtensions(const uint8_t *data) {
       servername.listLen = (data[offset] << 8) | data[offset + 1];
       offset += 2;
       servername.type = data[offset++];
-      servername.len = (data[offset] << 8) | data[offset + 1];
+      servername.len  = (data[offset] << 8) | data[offset + 1];
       offset += 2;
-      servername.name = std::string(data + offset, data + offset + servername.len);
+      servername.name      = std::string(data + offset, data + offset + servername.len);
       extension.servername = servername;
       extensions.push_back(extension);
     }

@@ -5,17 +5,17 @@
 
 class Ether : public Layer {
 public:
-  std::string shost; /**< source mac address host. */
-  std::string dhost; /**< destination mac address host. */
-  uint16_t eth_type; /**< packet ethernet type. */
+  std::string shost;    /**< source mac address host. */
+  std::string dhost;    /**< destination mac address host. */
+  uint16_t    eth_type; /**< packet ethernet type. */
 
-  Ether() = default;
-  Ether(const Ether &) = default;
+  Ether()                         = default;
+  Ether(const Ether &)            = default;
   Ether &operator=(const Ether &) = default;
   Ether(const uint8_t *data, size_t totalLength);
 
-  std::vector<uint8_t> serialize() const override { return {}; }
-  std::string toString() const override;
+  std::vector<uint8_t>   serialize() const override { return {}; }
+  std::string            toString() const override;
   std::unique_ptr<Layer> clone() const override;
 };
 

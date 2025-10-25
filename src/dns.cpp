@@ -1,7 +1,8 @@
 #include "dns.hpp"
 
-#include <iomanip>
 #include <netinet/in.h>
+
+#include <iomanip>
 #include <sstream>
 
 #include "utils.hpp"
@@ -22,7 +23,7 @@ std::string DNSQuery::parseDNSQueryName(const u_char *data, int &offset) {
 }
 
 DNSQuery::DNSQuery(const uint8_t *data, int &offset) {
-  name = parseDNSQueryName(data, offset);
+  name  = parseDNSQueryName(data, offset);
   qtype = static_cast<QType>(ntohs(*(uint16_t *)(data + offset)));
   offset += 2;
   qclass = static_cast<QClass>(ntohs(*(uint16_t *)(data + offset)));
@@ -96,12 +97,12 @@ DNS::DNS(const uint8_t *data, size_t totalLength) {
   UNUSED(totalLength);
 
   const DNSHeader *dnsHeader = (DNSHeader *)data;
-  transactionId = ntohs(dnsHeader->transactionId);
-  flags = ntohs(dnsHeader->flags);
-  queriesCount = ntohs(dnsHeader->q_count);
-  answersCount = ntohs(dnsHeader->and_count);
-  authoritiesCount = ntohs(dnsHeader->auth_count);
-  additionalsCount = ntohs(dnsHeader->add_count);
+  transactionId              = ntohs(dnsHeader->transactionId);
+  flags                      = ntohs(dnsHeader->flags);
+  queriesCount               = ntohs(dnsHeader->q_count);
+  answersCount               = ntohs(dnsHeader->and_count);
+  authoritiesCount           = ntohs(dnsHeader->auth_count);
+  additionalsCount           = ntohs(dnsHeader->add_count);
 
   int offset = sizeof(DNSHeader);
   for (int i = 0; i < queriesCount; ++i) {
