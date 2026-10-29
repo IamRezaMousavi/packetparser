@@ -1,5 +1,7 @@
-#ifndef __TCP_HPP__
-#define __TCP_HPP__
+#ifndef TCP_HPP
+#define TCP_HPP
+
+#include <span>
 
 #include "layer.hpp"
 
@@ -7,15 +9,16 @@ class TCP : public Layer {
 public:
   uint16_t sport; /**< source port. */
   uint16_t dport; /**< destination port. */
+  uint8_t  thl;   /**< tcp header length. */
 
   TCP()                       = default;
   TCP(const TCP &)            = default;
   TCP &operator=(const TCP &) = default;
-  TCP(const uint8_t *data, size_t totalLength);
+  TCP(std::span<const uint8_t> data);
 
-  std::vector<uint8_t>   serialize() const override { return {}; }
+  size_t                 size() const override;
   std::string            toString() const override;
   std::unique_ptr<Layer> clone() const override;
 };
 
-#endif /* __TCP_HPP__ */
+#endif /* TCP_HPP */

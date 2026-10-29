@@ -6,14 +6,27 @@
 #include <iomanip>
 #include <sstream>
 
-TCP::TCP(const uint8_t *data, size_t totalLength) {
-  const struct tcphdr *tcp = (const struct tcphdr *)data;
-  sport                    = ntohs(tcp->th_sport);
-  dport                    = ntohs(tcp->th_dport);
+TCP::TCP(std::span<const uint8_t> data) {
+  constexpr size_t HEADER_SIZE = sizeof(struct tcphdr);
 
-  payloadPtr = data + sizeof(struct tcphdr);
-  payloadLen = totalLength > sizeof(struct tcphdr) ? totalLength - sizeof(struct tcphdr) : 0;
+  if (data.size() < HEADER_SIZE) {
+    throw std::invalid_argument("TCP header is too short");
+  }
+
+  const struct tcphdr *tcp = (const struct tcphdr *)data.data();
+  thl                      = tcp->th_off * 4;
+
+  if (thl < HEADER_SIZE || data.size() < thl) {
+    throw std::invalid_argument("Invalid TCP header length");
+  }
+
+  sport = ntohs(tcp->th_sport);
+  dport = ntohs(tcp->th_dport);
 }
+
+size_t TCP::size() const { return thl; }
+
+std::unique_ptr<Layer> TCP::clone() const { return std::make_unique<TCP>(*this); }
 
 std::string TCP::toString() const {
   std::ostringstream ss;
@@ -24,5 +37,3 @@ std::string TCP::toString() const {
   ss << "+------------------+-------------------+\n";
   return ss.str();
 }
-
-std::unique_ptr<Layer> TCP::clone() const { return std::make_unique<TCP>(*this); }

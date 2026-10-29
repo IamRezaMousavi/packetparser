@@ -1,5 +1,5 @@
-#ifndef __PACKET_HPP__
-#define __PACKET_HPP__
+#ifndef PACKET_HPP
+#define PACKET_HPP
 
 #include <memory>
 #include <string>
@@ -63,4 +63,4 @@ inline Packet operator/(Ether &ether, IP &ip) {
   return pkt;
 }
 
-#endif /* __PACKET_HPP__ */
+#endif /* PACKET_HPP */

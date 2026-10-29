@@ -1,25 +1,27 @@
-#ifndef __IP_HPP__
-#define __IP_HPP__
+#ifndef IP_HPP
+#define IP_HPP
+
+#include <netinet/ip.h>
+
+#include <span>
 
 #include "layer.hpp"
 
 class IP : public Layer {
 public:
-  std::string src;      /**< source ip address. */
-  std::string dst;      /**< destination ip address. */
-  uint8_t     protocol; /**< ip protocol type. */
-  uint8_t     ihl;      /**< ip header length. */
+  struct in_addr src;      /**< source ip address. */
+  struct in_addr dst;      /**< destination ip address. */
+  uint8_t        protocol; /**< ip protocol type. */
+  uint8_t        ihl;      /**< ip header length. */
 
   IP()                      = default;
   IP(const IP &)            = default;
   IP &operator=(const IP &) = default;
-  IP(const uint8_t *data, size_t totalLength);
+  IP(std::span<const uint8_t> data);
 
-  size_t headerLength() const { return ihl; }
-
-  std::vector<uint8_t>   serialize() const override { return {}; }
+  size_t                 size() const override;
   std::string            toString() const override;
   std::unique_ptr<Layer> clone() const override;
 };
 
-#endif /* __IP_HPP__ */
+#endif /* IP_HPP */

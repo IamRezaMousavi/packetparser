@@ -1,31 +1,35 @@
 #include <getopt.h>
-#include <netinet/ether.h>
-#include <pcap.h>
 
+#include <atomic>
+#include <csignal>
 #include <cstdlib>
 #include <iostream>
+#include <span>
 #include <unordered_set>
 
 #include "packet.hpp"
-#include "pcap.hpp"
+#include "raw_socket.hpp"
 
 std::unordered_set<std::string> servernames;
 
 // DB db;
 
-void packetHandler(u_char *args, const struct pcap_pkthdr *pkthdr, const u_char *packet) {
-  (void)args;
-  Ether ether(packet, pkthdr->len);
+void packetParser(std::span<const uint8_t> p) {
+  size_t pos = 0;
+  Ether  ether(p);
+  pos += ether.size();
 
   switch (ether.eth_type) {
   case ETHERTYPE_IP: {
-    IP ip(ether.payload(), ether.payloadSize());
+    IP ip(p.subspan(pos));
+    pos += ip.size();
 
     if (ip.protocol == IPPROTO_UDP) {
-      UDP udp(ip.payload(), ip.payloadSize());
+      UDP udp(p.subspan(pos));
+      pos += udp.size();
 
       if (udp.sport == 53 || udp.dport == 53) {
-        DNS dns(udp.payload(), udp.payloadSize());
+        DNS dns(p.subspan(pos));
 
         Packet pkt = ether / ip / udp / dns;
         std::cout << pkt.toString() << std::endl;
@@ -37,20 +41,23 @@ void packetHandler(u_char *args, const struct pcap_pkthdr *pkthdr, const u_char 
         }
       }
     } else if (ip.protocol == IPPROTO_TCP) {
-      TCP tcp(ip.payload(), ip.payloadSize());
+      TCP tcp(p.subspan(pos));
+      pos += tcp.size();
 
       // Check for TLS handshake content type (0x16)
       // 0x16 is the content type for TLS Handshake
-      if (tcp.payloadSize() > 0 && tcp.payload()[0] == 0x16) {
-        TLS tls(tcp.payload(), tcp.payloadSize());
+      if (p.size() > pos && p[pos] == 0x16) {
+        TLS tls(p.subspan(pos));
         if (tls.handshake.has_value()) {
           const auto &handshake = tls.handshake.value();
-          if (handshake.type == TLSHandshakeType::TLS_CLIENT_HELLO) {
+          if (handshake.type == TLSHandshakeType::ClientHello) {
             Packet pkt = ether / ip / tcp / tls;
             std::cout << pkt.toString() << std::endl;
           }
+
           for (const auto &ext : handshake.extensions) {
-            servernames.insert(ext.servername.name);
+            if (ext.servername.has_value())
+              servernames.insert(ext.servername.value().name);
           }
         }
       }
@@ -77,7 +84,7 @@ struct Cli {
 void usage(const char *progname) {
   std::cerr << "Usage: " << progname << " -s <src> -a <appname> [-f filter] [-d]\n\n"
             << "Options:\n"
-            << "  -s <src>        Source (e.g., eth0 or file.pcap)\n"
+            << "  -s <src>        Interface name (e.g., eth0)\n"
             << "  -a <appname>    Application name\n"
             << "  -f <filter>     Filter string (Optional)\n"
             << "  -d              Enable debug prints (Optional)\n"
@@ -116,13 +123,41 @@ void cli_parser(int argc, char *argv[]) {
   }
 }
 
+std::atomic<bool> running{true};
+
+void on_signal(int) { running = false; }
+
 int main(int argc, char *argv[]) {
   cli_parser(argc, argv);
 
-  PcapWrapper pcap(cli.source, cli.filter);
   std::cout << "Reading packets from " << cli.source << ": " << cli.appname << std::endl;
 
-  pcap.loop(packetHandler);
+  try {
+    RawSocket sock(cli.source);
+    sock.set_recv_timeout(1000);
+    std::cout << "Opened raw socket on " << sock.ifname() << " (ifindex=" << sock.ifindex() << ")\n";
+
+    std::signal(SIGINT, on_signal);
+    std::cout << "Listening... (Ctrl+C to stop)\n\n";
+
+    while (running) {
+      auto data = sock.recv();
+      if (data.empty())
+        continue; // timeout or interrupt
+
+      try {
+        packetParser(data);
+      } catch (const std::exception &e) {
+        std::cerr << "Error Parser: " << e.what() << "\n";
+      }
+    }
+
+    std::cout << "\nStopped.\n";
+
+  } catch (const std::exception &e) {
+    std::cerr << "Error: " << e.what() << "\n";
+    return 1;
+  }
 
   if (!servernames.empty()) {
     std::cout << "Servernames:" << std::endl;

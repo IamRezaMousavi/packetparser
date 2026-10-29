@@ -1,18 +1,20 @@
-#ifndef __TLS_HPP__
-#define __TLS_HPP__
+#ifndef TLS_HPP
+#define TLS_HPP
 
 #include <optional>
+#include <span>
+#include <vector>
 
 #include "layer.hpp"
 
 enum class TLSContentType : uint8_t {
-  TLS_CTYPE_ALERT            = 21, // Alert message
-  TLS_CTYPE_HANDSHAKE        = 22, // Handshake message
-  TLS_CTYPE_APPLICATION_DATA = 23, // Application data message
-  TLS_CTYPE_HEARTBEAT        = 24, // Heartbeat message
-  TLS_CTYPE_CID              = 25,
-  TLS_CTYPE_ACK              = 26,
-  TLS_CTYPE_RTC              = 27,
+  Alert           = 21, // Alert message
+  Handshake       = 22, // Handshake message
+  ApplicationData = 23, // Application data message
+  Heartbeat       = 24, // Heartbeat message
+  CID             = 25,
+  ACK             = 26,
+  RTC             = 27,
 };
 
 enum class TLSVersion : uint16_t {
@@ -24,91 +26,79 @@ enum class TLSVersion : uint16_t {
 };
 
 enum class TLSHandshakeType : uint8_t {
-  TLS_HELLO_REQ         = 0,
-  TLS_CLIENT_HELLO      = 1,
-  TLS_SERVER_HELLO      = 2,
-  TLS_NEW_TICKET        = 4,
-  TLS_END_OF_EARLY_DATA = 5,
-  TLS_CERT              = 11,
-  TLS_SERVER_KEY_EXCH   = 12,
-  TLS_SERVER_HELLO_DONE = 14,
-  TLS_CERT_REQ          = 13,
-  TLS_CLIENT_KEY_EXCH   = 16,
-  TLS_FINISHED          = 20,
-  TLS_CERT_STATUS       = 22,
+  HelloRequest       = 0,
+  ClientHello        = 1,
+  ServerHello        = 2,
+  NewSessionTicket   = 4,
+  EndOfEarlyData     = 5,
+  Certificate        = 11,
+  ServerKeyExchange  = 12,
+  CertificateRequest = 13,
+  ServerHelloDone    = 14,
+  ClientKeyExchange  = 16,
+  Finished           = 20,
+  CertificateStatus  = 22,
 };
 
 enum class TLSExtensionType : uint16_t {
-  TLS_EXT_SERVERNAME     = 0,
-  TLS_EXT_PADDING        = 21,
-  TLS_EXT_SUPPORTED_VERS = 43,
+  ServerName        = 0,
+  Padding           = 21,
+  SupportedVersions = 43,
 };
 
 struct TLSTuple {
   std::string          name;
-  uint16_t             len;
+  uint16_t             len = 0;
   std::vector<uint8_t> data;
 };
 
 struct TLSExtensionServerName {
-  uint16_t    listLen;
-  uint8_t     type;
-  uint16_t    len;
+  uint16_t    listLen = 0;
+  uint8_t     type    = 0;
+  uint16_t    len     = 0;
   std::string name;
 };
 
 struct TLSExtension {
-public:
-  TLSExtensionType type;
-  uint16_t         len;
-
-  TLSExtensionServerName servername{};
-  std::string            toString(TLSExtensionType type) const;
+  TLSExtensionType                      type = TLSExtensionType::ServerName;
+  uint16_t                              len  = 0;
+  std::optional<TLSExtensionServerName> servername;
 };
 
 class TLSHandshake {
 public:
-  void             parseTLSClientHello(const u_char *data);
-  void             parseTLSExtensions(const u_char *data);
-  TLSHandshakeType type;
-  uint32_t         len;
-  uint16_t         version;
+  TLSHandshakeType type    = TLSHandshakeType::ClientHello;
+  uint32_t         length  = 0;
+  uint16_t         version = 0;
 
   std::vector<uint8_t> random;
+  TLSTuple             sessionId;
+  TLSTuple             cipherSuites;
+  TLSTuple             compressionMethods;
 
-  TLSTuple sessionId;
-
-  /* client hello */
-  TLSTuple cipherSuits;
-  TLSTuple compressionMethods;
-
-  uint16_t                  extensionsLen;
+  uint16_t                  extensionsLen = 0;
   std::vector<TLSExtension> extensions;
-  std::string               toString(TLSHandshakeType type) const;
+
+  void parseClientHello(std::span<const uint8_t> data);
+  void parseExtensions(std::span<const uint8_t> data);
 };
 
 class TLS : public Layer {
 public:
-  TLSContentType contentType;
-  TLSVersion     version;
-  uint32_t       len;
+  TLSContentType contentType{};
+  TLSVersion     version{};
+  uint16_t       length = 0;
 
   std::optional<TLSHandshake> handshake;
 
-  TLS()                       = default;
-  TLS(const TLS &)            = default;
-  TLS &operator=(const TLS &) = default;
-  TLS(const uint8_t *data, size_t totalLength);
+  TLS() = default;
+  explicit TLS(std::span<const uint8_t> data);
 
-  std::vector<uint8_t>   serialize() const override { return {}; }
+  size_t                 size() const override;
   std::string            toString() const override;
   std::unique_ptr<Layer> clone() const override;
-
-private:
-  std::string toString(TLSContentType contentType) const;
-  std::string toString(TLSVersion version) const;
 };
 
 std::ostream &operator<<(std::ostream &os, const TLS &tls);
 
-#endif /* __TLS_HPP__ */
+#endif /* TLS_HPP */

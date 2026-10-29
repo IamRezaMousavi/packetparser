@@ -1,5 +1,7 @@
-#ifndef __UDP_HPP__
-#define __UDP_HPP__
+#ifndef UDP_HPP
+#define UDP_HPP
+
+#include <span>
 
 #include "layer.hpp"
 
@@ -11,16 +13,11 @@ public:
   UDP()                       = default;
   UDP(const UDP &)            = default;
   UDP &operator=(const UDP &) = default;
-  /**
-   * Constructor to create UDP layer object.
-   * @param data pointer to layer data.
-   * @param totalLength data layer length.
-   */
-  UDP(const uint8_t *data, size_t totalLength);
+  UDP(std::span<const uint8_t> data);
 
-  std::vector<uint8_t>   serialize() const override { return {}; }
+  size_t                 size() const override;
   std::string            toString() const override;
   std::unique_ptr<Layer> clone() const override;
 };
 
-#endif /* __UDP_HPP__ */
+#endif /* UDP_HPP */

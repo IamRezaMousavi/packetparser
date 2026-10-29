@@ -1,110 +1,169 @@
 #include "tls.hpp"
 
+#include <cstring>
 #include <iomanip>
 #include <iostream>
 #include <sstream>
+#include <stdexcept>
 
-#include "utils.hpp"
+// ---------- helpers ----------
+namespace {
 
-TLS::TLS(const uint8_t *data, size_t totalLength) {
-  UNUSED(totalLength);
+uint16_t readUint16(std::span<const uint8_t> data, size_t offset) {
+  if (offset + 2 > data.size())
+    throw std::runtime_error("TLS: not enough data for uint16");
+  return (static_cast<uint16_t>(data[offset]) << 8) | data[offset + 1];
+}
+
+uint32_t readUint24(std::span<const uint8_t> data, size_t offset) {
+  if (offset + 3 > data.size())
+    throw std::runtime_error("TLS: not enough data for uint24");
+  return (static_cast<uint32_t>(data[offset]) << 16) | (static_cast<uint32_t>(data[offset + 1]) << 8)
+         | static_cast<uint32_t>(data[offset + 2]);
+}
+
+std::vector<uint8_t> readBytes(std::span<const uint8_t> data, size_t offset, size_t len) {
+  if (offset + len > data.size())
+    throw std::runtime_error("TLS: not enough data for bytes");
+  return {data.begin() + offset, data.begin() + offset + len};
+}
+
+} // namespace
+
+TLS::TLS(std::span<const uint8_t> data) {
+  if (data.size() < 5)
+    throw std::runtime_error("TLS: record too short");
 
   contentType = static_cast<TLSContentType>(data[0]);
-  version     = static_cast<TLSVersion>((data[1] << 8) | data[2]);
-  len         = (data[3] << 8) | data[4];
+  version     = static_cast<TLSVersion>(readUint16(data, 1));
+  length      = readUint16(data, 3);
 
-  if (contentType == TLSContentType::TLS_CTYPE_HANDSHAKE) {
-    const uint8_t *handshakeData = data + 5;
-    TLSHandshake   handshake;
-    handshake.type = static_cast<TLSHandshakeType>(handshakeData[0]);
-    handshake.len  = (handshakeData[1] << 16) | (handshakeData[2] << 8) | handshakeData[3];
+  if (contentType != TLSContentType::Handshake)
+    return;
 
-    switch (handshake.type) {
-    case TLSHandshakeType::TLS_CLIENT_HELLO:
-      handshake.parseTLSClientHello(data + 9);
-      break;
+  if (data.size() < 9)
+    throw std::runtime_error("TLS: handshake header too short");
 
-    default:
-      break;
-    }
+  TLSHandshake hs;
+  hs.type   = static_cast<TLSHandshakeType>(data[5]);
+  hs.length = readUint24(data, 6);
 
-    handshake = handshake;
-  }
+  if (hs.type == TLSHandshakeType::ClientHello)
+    hs.parseClientHello(data.subspan(9));
+
+  handshake = std::move(hs);
 }
 
-void TLSHandshake::parseTLSClientHello(const uint8_t *data) {
+size_t TLS::size() const { return length + 5; }
+
+std::unique_ptr<Layer> TLS::clone() const { return std::make_unique<TLS>(*this); }
+
+void TLSHandshake::parseClientHello(std::span<const uint8_t> data) {
   size_t offset = 0;
-  version       = (data[offset] << 8) | data[offset + 1];
+
+  version = readUint16(data, offset);
   offset += 2;
 
-  random.assign(data + offset, data + offset + 32);
+  random = readBytes(data, offset, 32);
   offset += 32;
 
-  sessionId.name = "session id";
+  // Session ID
+  sessionId.name = "session_id";
   sessionId.len  = data[offset++];
-  sessionId.data.assign(data + offset, data + offset + sessionId.len);
+  sessionId.data = readBytes(data, offset, sessionId.len);
   offset += sessionId.len;
 
-  TLSTuple cipherSuits;
-  cipherSuits.name = "cipher suits";
-  cipherSuits.len  = (data[offset] << 8) | data[offset + 1];
+  // Cipher Suites
+  cipherSuites.name = "cipher_suites";
+  cipherSuites.len  = readUint16(data, offset);
   offset += 2;
-  cipherSuits.data.assign(data + offset, data + offset + cipherSuits.len);
-  cipherSuits = cipherSuits;
-  offset += cipherSuits.len;
+  cipherSuites.data = readBytes(data, offset, cipherSuites.len);
+  offset += cipherSuites.len;
 
-  TLSTuple compressionMethods;
-  compressionMethods.name = "compression methods";
+  // Compression Methods
+  compressionMethods.name = "compression_methods";
   compressionMethods.len  = data[offset++];
-  compressionMethods.data.assign(data + offset, data + offset + compressionMethods.len);
-  compressionMethods = compressionMethods;
+  compressionMethods.data = readBytes(data, offset, compressionMethods.len);
   offset += compressionMethods.len;
 
-  extensionsLen = (data[offset] << 8) | data[offset + 1];
+  // Extensions
+  extensionsLen = readUint16(data, offset);
   offset += 2;
 
-  parseTLSExtensions(data + offset);
+  if (extensionsLen != data.size() - offset) {
+    throw std::runtime_error("TLS: invalid extensions length");
+  }
+
+  parseExtensions(data.subspan(offset, extensionsLen));
 }
 
-void TLSHandshake::parseTLSExtensions(const uint8_t *data) {
+void TLSHandshake::parseExtensions(std::span<const uint8_t> data) {
   size_t offset = 0;
-  for (size_t i = 0; i < extensionsLen; i++) {
-    TLSExtension extension;
-    extension.type = static_cast<TLSExtensionType>((data[offset] << 8) | data[offset + 1]);
-    offset += 2;
-    extension.len = (data[offset] << 8) | data[offset + 1];
-    offset += 2;
 
-    if (extension.type == TLSExtensionType::TLS_EXT_SERVERNAME) {
-      TLSExtensionServerName servername;
-      servername.listLen = (data[offset] << 8) | data[offset + 1];
-      offset += 2;
-      servername.type = data[offset++];
-      servername.len  = (data[offset] << 8) | data[offset + 1];
-      offset += 2;
-      servername.name      = std::string(data + offset, data + offset + servername.len);
-      extension.servername = servername;
-      extensions.push_back(extension);
+  while (offset < data.size()) {
+    if (data.size() - offset < 4) {
+      throw std::runtime_error("TLS: incomplete extension header");
     }
+
+    TLSExtension ext;
+    ext.type = static_cast<TLSExtensionType>(readUint16(data, offset));
+    offset += 2;
+
+    ext.len = readUint16(data, offset);
+    offset += 2;
+
+    if (ext.len > data.size() - offset) {
+      throw std::runtime_error("TLS: extension data out of bounds");
+    }
+
+    const auto ext_data = data.subspan(offset, ext.len);
+
+    if (ext.type == TLSExtensionType::ServerName && ext.len >= 5) {
+      TLSExtensionServerName servername;
+
+      servername.listLen = readUint16(ext_data, 0);
+
+      if (servername.listLen > ext_data.size() - 2) {
+        throw std::runtime_error("TLS: server name list out of bounds");
+      }
+
+      if (servername.listLen >= 3) {
+        servername.type = ext_data[2];
+        servername.len  = readUint16(ext_data, 3);
+
+        if (servername.len > servername.listLen - 3) {
+          throw std::runtime_error("TLS: server name out of bounds");
+        }
+
+        if (servername.type == 0) {
+          servername.name.assign(reinterpret_cast<const char *>(ext_data.data() + 5), servername.len);
+        }
+      }
+
+      ext.servername = std::move(servername);
+    }
+
+    extensions.push_back(std::move(ext));
+    offset += ext.len;
   }
 }
 
-std::string TLS::toString(const TLSContentType contentType) const {
+static std::string toString(const TLSContentType contentType) {
   switch (contentType) {
-  case TLSContentType::TLS_CTYPE_ALERT:
+  case TLSContentType::Alert:
     return "Alert";
-  case TLSContentType::TLS_CTYPE_HANDSHAKE:
+  case TLSContentType::Handshake:
     return "Handshake";
-  case TLSContentType::TLS_CTYPE_APPLICATION_DATA:
-    return "APPLICATION_DATA";
-  case TLSContentType::TLS_CTYPE_HEARTBEAT:
-    return "HEARTBEAT";
+  case TLSContentType::ApplicationData:
+    return "ApplicationData";
+  case TLSContentType::Heartbeat:
+    return "Heartbeat";
   default:
-    return "UNKNOWN";
+    return "Unknown";
   }
 }
 
-std::string TLS::toString(TLSVersion version) const {
+static std::string toString(const TLSVersion version) {
   switch (version) {
   case TLSVersion::TLS_1_0:
     return "TLS 1.0";
@@ -119,67 +178,65 @@ std::string TLS::toString(TLSVersion version) const {
   }
 }
 
-std::string TLSHandshake::toString(TLSHandshakeType type) const {
+static std::string toString(const TLSHandshakeType type) {
   switch (type) {
-  case TLSHandshakeType::TLS_HELLO_REQ:
+  case TLSHandshakeType::HelloRequest:
     return "Hello Request";
-  case TLSHandshakeType::TLS_CLIENT_HELLO:
+  case TLSHandshakeType::ClientHello:
     return "Client Hello";
-  case TLSHandshakeType::TLS_SERVER_HELLO:
+  case TLSHandshakeType::ServerHello:
     return "Server Hello";
-  case TLSHandshakeType::TLS_NEW_TICKET:
+  case TLSHandshakeType::NewSessionTicket:
     return "New Ticket";
-  case TLSHandshakeType::TLS_END_OF_EARLY_DATA:
+  case TLSHandshakeType::EndOfEarlyData:
     return "End Of Early Data";
-  case TLSHandshakeType::TLS_CERT:
+  case TLSHandshakeType::Certificate:
     return "Certidicate";
-  case TLSHandshakeType::TLS_SERVER_KEY_EXCH:
+  case TLSHandshakeType::ServerKeyExchange:
     return "Server Key Exchange";
-  case TLSHandshakeType::TLS_SERVER_HELLO_DONE:
+  case TLSHandshakeType::ServerHelloDone:
     return "Server Hello Done";
-  case TLSHandshakeType::TLS_CERT_REQ:
+  case TLSHandshakeType::CertificateRequest:
     return "Certificate Request";
-  case TLSHandshakeType::TLS_CLIENT_KEY_EXCH:
+  case TLSHandshakeType::ClientKeyExchange:
     return "Client Key Exchange";
-  case TLSHandshakeType::TLS_FINISHED:
+  case TLSHandshakeType::Finished:
     return "Finished";
-  case TLSHandshakeType::TLS_CERT_STATUS:
+  case TLSHandshakeType::CertificateStatus:
     return "Certification Status";
   default:
     return "UNKNOWN";
   }
 }
 
-std::string TLSExtension::toString(TLSExtensionType type) const {
+static std::string toString(const TLSExtensionType type) {
   switch (type) {
-  case TLSExtensionType::TLS_EXT_SERVERNAME:
+  case TLSExtensionType::ServerName:
     return "Server Name";
-  case TLSExtensionType::TLS_EXT_SUPPORTED_VERS:
+  case TLSExtensionType::SupportedVersions:
     return "Supported Vers";
-  case TLSExtensionType::TLS_EXT_PADDING:
+  case TLSExtensionType::Padding:
     return "Padding";
   default:
     return "UNKNOWN";
   }
 }
 
-std::unique_ptr<Layer> TLS::clone() const { return std::make_unique<TLS>(*this); }
-
 std::string TLS::toString() const {
   std::ostringstream ss;
   ss << "|                 TLS                  |\n";
   ss << "+------------------+-------------------+\n";
-  ss << "|     Content Type | " << std::left << std::setw(17) << toString(contentType) << " |\n";
-  ss << "|          Version | " << std::left << std::setw(17) << toString(version) << " |\n";
-  ss << "|           Length | " << std::left << std::setw(17) << len << " |\n";
+  ss << "|     Content Type | " << std::left << std::setw(17) << ::toString(contentType) << " |\n";
+  ss << "|          Version | " << std::left << std::setw(17) << ::toString(version) << " |\n";
+  ss << "|           Length | " << std::left << std::setw(17) << length << " |\n";
   ss << "+------------------+-------------------+\n";
   ss << "|              Handshake               |\n";
   ss << "+------------------+-------------------+\n";
   // If the packet contains handshake data, output it
   if (handshake.has_value()) {
     const auto &_handshake = handshake.value();
-    ss << "|   Handshake Type | " << std::left << std::setw(17) << _handshake.toString(_handshake.type) << " |\n";
-    ss << "| Handshake Length | " << std::left << std::setw(17) << _handshake.len << " |\n";
+    ss << "|   Handshake Type | " << std::left << std::setw(17) << ::toString(_handshake.type) << " |\n";
+    ss << "| Handshake Length | " << std::left << std::setw(17) << _handshake.length << " |\n";
     ss << "+------------------+-------------------+\n";
 
     if (!_handshake.extensions.empty()) {
@@ -188,8 +245,13 @@ std::string TLS::toString() const {
       ss << "+------------------+-------------------+\n";
     }
     for (const auto &ext : _handshake.extensions) {
-      ss << "|             Type | " << std::left << std::setw(17) << ext.toString(ext.type) << " |\n";
-      ss << "|     SNI Hostname | " << ext.servername.name << '\n';
+      if (ext.type != TLSExtensionType::ServerName && ext.type != TLSExtensionType::Padding
+          && ext.type != TLSExtensionType::SupportedVersions)
+        continue;
+
+      ss << "|             Type | " << std::left << std::setw(17) << ::toString(ext.type) << " |\n";
+      if (ext.servername.has_value())
+        ss << "|     SNI Hostname | " << ext.servername.value().name << '\n';
       ss << "+------------------+-------------------+\n";
     }
   }

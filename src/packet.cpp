@@ -26,25 +26,21 @@ std::string Packet::toString() const {
 }
 
 Packet Packet::operator/(UDP &udp) {
-  Packet p = *this;
-  p.addLayer(udp);
-  return p;
+  addLayer(udp);
+  return *this;
 }
 
 Packet Packet::operator/(DNS &dns) {
-  Packet p = *this;
-  p.addLayer(dns);
-  return p;
+  addLayer(dns);
+  return *this;
 }
 
 Packet Packet::operator/(TCP &tcp) {
-  Packet p = *this;
-  p.addLayer(tcp);
-  return p;
+  addLayer(tcp);
+  return *this;
 }
 
 Packet Packet::operator/(TLS &tls) {
-  Packet p = *this;
-  p.addLayer(tls);
-  return p;
+  addLayer(tls);
+  return *this;
 }

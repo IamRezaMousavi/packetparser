@@ -1,5 +1,8 @@
-#ifndef __DNS_HPP__
-#define __DNS_HPP__
+#ifndef DNS_HPP
+#define DNS_HPP
+
+#include <span>
+#include <vector>
 
 #include "layer.hpp"
 
@@ -30,43 +33,45 @@ public:
   QType       qtype;
   QClass      qclass;
 
-  DNSQuery(const uint8_t *data, int &offset);
+  DNSQuery(std::span<const uint8_t> data, size_t offset);
   std::string toString() const;
 
+  size_t size() const;
+
 private:
-  /**
-   * parse dns query name from binary data.
-   * @param data pointer to binary data.
-   * @param offset start offset from data pointer.
-   */
-  std::string parseDNSQueryName(const u_char *data, int &offset);
+  size_t m_size = 0;
 
   std::string toString(QType type) const;
   std::string toString(QClass qclass) const;
 };
 
-class DNS : public Layer {
-public:
+struct DNSHeader {
   uint16_t transactionId;
   uint16_t flags;
-
   uint16_t queriesCount;
   uint16_t answersCount;
   uint16_t authoritiesCount;
   uint16_t additionalsCount;
+};
 
+class DNS : public Layer {
+public:
+  DNSHeader             h;
   std::vector<DNSQuery> queries;
 
   DNS()                       = default;
   DNS(const DNS &)            = default;
   DNS &operator=(const DNS &) = default;
-  DNS(const uint8_t *data, size_t totalLength);
+  DNS(std::span<const uint8_t> data);
 
-  std::vector<uint8_t>   serialize() const override { return {}; }
-  std::string            toString() const;
+  size_t                 size() const override;
+  std::string            toString() const override;
   std::unique_ptr<Layer> clone() const override;
+
+private:
+  size_t m_size = 0;
 };
 
 std::ostream &operator<<(std::ostream &os, const DNS &dns);
 
-#endif /* __DNS_HPP__ */
+#endif /* DNS_HPP */
