@@ -2,7 +2,9 @@
 #define PACKET_HPP
 
 #include <memory>
+#include <stdexcept>
 #include <string>
+#include <typeinfo>
 #include <vector>
 
 #include "dns.hpp"
@@ -43,7 +45,7 @@ public:
       if (auto ptr = dynamic_cast<T *>(l.get()))
         return ptr;
     }
-    return nullptr;
+    throw std::runtime_error(std::string("Layer of type ") + typeid(T).name() + " not found");
   }
 
   Packet operator/(UDP &udp);
@@ -56,7 +58,7 @@ public:
  * Helper function to create a packet from L2 and L3.
  * @return created packet.
  */
-inline Packet operator/(Ether &ether, IP &ip) {
+inline Packet operator/(const Ether &ether, const IP &ip) {
   Packet pkt;
   pkt.addLayer(ether);
   pkt.addLayer(ip);

@@ -214,7 +214,7 @@ static std::string toString(const TLSExtensionType type) {
   case TLSExtensionType::ServerName:
     return "Server Name";
   case TLSExtensionType::SupportedVersions:
-    return "Supported Vers";
+    return "Supported Versions";
   case TLSExtensionType::Padding:
     return "Padding";
   default:

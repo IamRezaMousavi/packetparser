@@ -1,15 +1,19 @@
 PROJECT := packetparser
 
-CC       := cc
-CCX      := c++
-CFLAGS   := -O2 -Wall -Wextra
-CXXFLAGS := $(CFLAGS) -std=c++20
-LDFLAGS  :=
-LIBS     :=
-
 SRC_DIR   := src
 INC_DIR   := include
 BUILD_DIR := build
+
+MARIADB_CFLAGS := $(shell pkg-config --cflags libmariadb)
+MARIADB_LIBS   := $(shell pkg-config --libs libmariadb)
+
+
+CC       := cc
+CCX      := c++
+CFLAGS   := -O2 -Wall -Wextra $(MARIADB_CFLAGS)
+CXXFLAGS := $(CFLAGS) -std=c++20
+LDFLAGS  :=
+LIBS     := $(MARIADB_LIBS)
 
 TARGETS := $(BUILD_DIR)/$(PROJECT)
 

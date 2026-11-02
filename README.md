@@ -7,7 +7,7 @@ A packet parser to save SNI, IP and ... in DB
 ### Install Deps
 
 * `libpcap-dev`
-* `libmysqlcppconn-dev`
+* `libmariadb-dev`
 
 ### Compile
 

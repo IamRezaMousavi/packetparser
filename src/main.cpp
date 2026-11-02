@@ -7,12 +7,14 @@
 #include <span>
 #include <unordered_set>
 
+#include "db.hpp"
 #include "packet.hpp"
 #include "raw_socket.hpp"
 
 std::unordered_set<std::string> servernames;
 
-// DB db;
+DBConfig     config;
+DBConnection db(config);
 
 void packetParser(std::span<const uint8_t> p) {
   size_t pos = 0;
@@ -34,7 +36,7 @@ void packetParser(std::span<const uint8_t> p) {
         Packet pkt = ether / ip / udp / dns;
         std::cout << pkt.toString() << std::endl;
 
-        // db.insert_dns(dnsPacket);
+        db.insert_dns(pkt);
 
         for (const auto &q : dns.queries) {
           servernames.insert(q.name);
@@ -53,6 +55,8 @@ void packetParser(std::span<const uint8_t> p) {
           if (handshake.type == TLSHandshakeType::ClientHello) {
             Packet pkt = ether / ip / tcp / tls;
             std::cout << pkt.toString() << std::endl;
+
+            db.insert_tls(pkt);
           }
 
           for (const auto &ext : handshake.extensions) {
@@ -129,6 +133,7 @@ void on_signal(int) { running = false; }
 
 int main(int argc, char *argv[]) {
   cli_parser(argc, argv);
+  db.setAppname(cli.appname);
 
   std::cout << "Reading packets from " << cli.source << ": " << cli.appname << std::endl;
 
