@@ -3,11 +3,8 @@
 #include <cstdint>
 #include <iterator>
 #include <memory>
-#include <optional>
 #include <span>
-#include <stdexcept>
 #include <string>
-#include <string_view>
 #include <vector>
 
 struct RawPacket {
