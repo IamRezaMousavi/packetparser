@@ -25,6 +25,7 @@ std::unique_ptr<Layer> Ether::clone() const { return std::make_unique<Ether>(*th
 
 std::string Ether::toString() const {
   std::ostringstream ss;
+  ss << "+------------------+-------------------+\n";
   ss << "|               Ethernet               |\n";
   ss << "+------------------+-------------------+\n";
   ss << "| Source MAC       | " << std::left << std::setw(17) << ether_ntoa(&shost) << " |\n";

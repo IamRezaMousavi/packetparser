@@ -1,7 +1,7 @@
 #ifndef DB_HPP
 #define DB_HPP
 
-#include <mariadb/mysql.h>
+#include <mysql.h>
 
 #include <memory>
 #include <string>

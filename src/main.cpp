@@ -4,17 +4,17 @@
 #include <csignal>
 #include <cstdlib>
 #include <iostream>
+#include <memory>
 #include <span>
 #include <unordered_set>
 
 #include "db.hpp"
 #include "packet.hpp"
+#include "pcap.hpp"
 #include "raw_socket.hpp"
 
 std::unordered_set<std::string> servernames;
-
-DBConfig     config;
-DBConnection db(config);
+std::shared_ptr<DBConnection>   db = nullptr;
 
 void packetParser(std::span<const uint8_t> p) {
   size_t pos = 0;
@@ -34,9 +34,9 @@ void packetParser(std::span<const uint8_t> p) {
         DNS dns(p.subspan(pos));
 
         Packet pkt = ether / ip / udp / dns;
-        std::cout << pkt.toString() << std::endl;
+        std::cout << pkt.toString();
 
-        db.insert_dns(pkt);
+        db->insert_dns(pkt);
 
         for (const auto &q : dns.queries) {
           servernames.insert(q.name);
@@ -54,9 +54,9 @@ void packetParser(std::span<const uint8_t> p) {
           const auto &handshake = tls.handshake.value();
           if (handshake.type == TLSHandshakeType::ClientHello) {
             Packet pkt = ether / ip / tcp / tls;
-            std::cout << pkt.toString() << std::endl;
+            std::cout << pkt.toString();
 
-            db.insert_tls(pkt);
+            db->insert_tls(pkt);
           }
 
           for (const auto &ext : handshake.extensions) {
@@ -79,16 +79,18 @@ void packetParser(std::span<const uint8_t> p) {
 }
 
 struct Cli {
-  std::string                source;
+  std::string                interface;
+  std::string                pcap_file;
   std::string                appname;
   std::optional<std::string> filter;
   bool                       debug;
 } cli;
 
 void usage(const char *progname) {
-  std::cerr << "Usage: " << progname << " -s <src> -a <appname> [-f filter] [-d]\n\n"
+  std::cerr << "Usage: " << progname << " -i <interface> | -p <pcap_file> -a <appname> [-f filter] [-d]\n\n"
             << "Options:\n"
-            << "  -s <src>        Interface name (e.g., eth0)\n"
+            << "  -i <interface>  Interface name (e.g., eth0)\n"
+            << "  -p <pcap_file>  Pcap file name (e.g., packets.pcap)\n"
             << "  -a <appname>    Application name\n"
             << "  -f <filter>     Filter string (Optional)\n"
             << "  -d              Enable debug prints (Optional)\n"
@@ -97,10 +99,13 @@ void usage(const char *progname) {
 
 void cli_parser(int argc, char *argv[]) {
   int opt;
-  while ((opt = getopt(argc, argv, "m:s:a:f:hd")) != -1) {
+  while ((opt = getopt(argc, argv, "i:p:a:f:hd")) != -1) {
     switch (opt) {
-    case 's':
-      cli.source = optarg;
+    case 'i':
+      cli.interface = optarg;
+      break;
+    case 'p':
+      cli.pcap_file = optarg;
       break;
     case 'a':
       cli.appname = optarg;
@@ -108,22 +113,26 @@ void cli_parser(int argc, char *argv[]) {
     case 'f':
       cli.filter = optarg;
       break;
-    case 'h':
-      usage(argv[0]);
-      exit(EXIT_SUCCESS);
     case 'd':
       cli.debug = true;
       break;
+    case 'h':
     default:
       usage(argv[0]);
-      exit(EXIT_FAILURE);
+      std::exit(EXIT_FAILURE);
     }
   }
 
-  if (cli.source.empty() || cli.appname.empty()) {
+  if ((cli.interface.empty() && cli.pcap_file.empty()) || cli.appname.empty()) {
     std::cerr << "Missing required arguments\n\n";
     usage(argv[0]);
-    exit(EXIT_FAILURE);
+    std::exit(EXIT_FAILURE);
+  }
+
+  if (!cli.interface.empty() && !cli.pcap_file.empty()) {
+    std::cerr << "Cannot specify both -i and -p\n\n";
+    usage(argv[0]);
+    std::exit(EXIT_FAILURE);
   }
 }
 
@@ -133,35 +142,42 @@ void on_signal(int) { running = false; }
 
 int main(int argc, char *argv[]) {
   cli_parser(argc, argv);
-  db.setAppname(cli.appname);
 
-  std::cout << "Reading packets from " << cli.source << ": " << cli.appname << std::endl;
+  const std::string source = cli.interface.empty() ? cli.pcap_file : cli.interface;
+  std::cout << "Reading packets from " << source << " (" << cli.appname << ")\n";
+
+  std::signal(SIGINT, on_signal);
 
   try {
-    RawSocket sock(cli.source);
-    sock.set_recv_timeout(1000);
-    std::cout << "Opened raw socket on " << sock.ifname() << " (ifindex=" << sock.ifindex() << ")\n";
+    DBConfig dbconfig;
+    db = std::make_shared<DBConnection>(dbconfig);
+    db->setAppname(cli.appname);
 
-    std::signal(SIGINT, on_signal);
-    std::cout << "Listening... (Ctrl+C to stop)\n\n";
+    std::unique_ptr<PacketSource> source_ptr;
+    if (!cli.interface.empty()) {
+      auto live  = std::make_unique<LiveCapture>(cli.interface);
+      source_ptr = std::move(live);
+      std::cout << "Listening... (Ctrl+C to stop)\n\n";
+    } else {
+      source_ptr = std::make_unique<PcapReader>(cli.pcap_file, cli.filter);
+    }
 
-    while (running) {
-      auto data = sock.recv();
-      if (data.empty())
-        continue; // timeout or interrupt
+    for (const auto &pkt : *source_ptr) {
+      if (!running)
+        break;
 
       try {
-        packetParser(data);
+        packetParser(pkt.bytes());
       } catch (const std::exception &e) {
-        std::cerr << "Error Parser: " << e.what() << "\n";
+        std::cerr << "Error Parser: " << e.what() << '\n';
       }
     }
 
-    std::cout << "\nStopped.\n";
+    std::cout << "Done.\n";
 
   } catch (const std::exception &e) {
     std::cerr << "Error: " << e.what() << "\n";
-    return 1;
+    return EXIT_FAILURE;
   }
 
   if (!servernames.empty()) {

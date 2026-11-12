@@ -21,6 +21,8 @@
 #include <linux/if_packet.h>
 #include <net/ethernet.h>
 
+#include "packet_source.hpp"
+
 class RawSocket {
 public:
   explicit RawSocket(const std::string &ifname) : fd_(-1), ifindex_(0), ifname_(ifname) {
@@ -152,4 +154,31 @@ private:
   int         fd_;
   int         ifindex_;
   std::string ifname_;
+};
+
+class LiveCapture : public PacketSource {
+public:
+  explicit LiveCapture(const std::string &ifname, int timeout_ms = 1000) : socket_(ifname) {
+    socket_.set_recv_timeout(timeout_ms);
+  }
+
+  void set_timeout(int timeout_ms) { socket_.set_recv_timeout(timeout_ms); }
+
+protected:
+  bool next() override {
+    while (true) {
+      auto pkt = socket_.recv();
+      if (pkt.empty())
+        continue;
+      current_ = RawPacket{std::move(pkt)};
+      break;
+    }
+    return true;
+  }
+
+  const RawPacket &current() const override { return current_; }
+
+private:
+  RawSocket socket_;
+  RawPacket current_;
 };

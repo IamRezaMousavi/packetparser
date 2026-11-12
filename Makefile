@@ -6,14 +6,16 @@ BUILD_DIR := build
 
 MARIADB_CFLAGS := $(shell pkg-config --cflags libmariadb)
 MARIADB_LIBS   := $(shell pkg-config --libs libmariadb)
+PCAP_CFLAGS := $(shell pkg-config --cflags libpcap)
+PCAP_LIBS := $(shell pkg-config --libs libpcap)
 
 
 CC       := cc
 CCX      := c++
-CFLAGS   := -O2 -Wall -Wextra $(MARIADB_CFLAGS)
+CFLAGS   := -O2 -Wall -Wextra $(MARIADB_CFLAGS) $(PCAP_CFLAGS)
 CXXFLAGS := $(CFLAGS) -std=c++20
 LDFLAGS  :=
-LIBS     := $(MARIADB_LIBS)
+LIBS     := $(MARIADB_LIBS) $(PCAP_LIBS)
 
 TARGETS := $(BUILD_DIR)/$(PROJECT)
 

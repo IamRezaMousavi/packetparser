@@ -34,7 +34,7 @@ void DBConnection::connect() {
       )) {
     std::string err = mysql_error(connection_.get());
     connection_.reset(); // closes the connection
-    throw std::runtime_error(err);
+    throw std::runtime_error(std::string("mysql_connect failed: ") + err);
   }
 }
 

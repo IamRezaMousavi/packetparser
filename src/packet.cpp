@@ -21,7 +21,7 @@ void Packet::addLayer(const Layer &l) { layers.push_back(l.clone()); }
 std::string Packet::toString() const {
   std::ostringstream ss;
   for (const auto &l : layers)
-    ss << l->toString() << '\n';
+    ss << l->toString();
   return ss.str();
 }
 
