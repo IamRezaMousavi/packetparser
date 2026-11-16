@@ -25,9 +25,13 @@ IP::IP(std::span<const uint8_t> data) {
   protocol = iphdr->ip_p;
 }
 
-size_t IP::size() const { return ihl; }
+size_t IP::size() const {
+  return ihl;
+}
 
-std::unique_ptr<Layer> IP::clone() const { return std::make_unique<IP>(*this); }
+std::unique_ptr<Layer> IP::clone() const {
+  return std::make_unique<IP>(*this);
+}
 
 std::string IP::toString() const {
   std::ostringstream ss;

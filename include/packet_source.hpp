@@ -10,8 +10,12 @@
 struct RawPacket {
   std::vector<std::uint8_t> data;
 
-  std::span<const std::uint8_t> bytes() const noexcept { return data; }
-  explicit                      operator std::span<const std::uint8_t>() const noexcept { return data; }
+  std::span<const std::uint8_t> bytes() const noexcept {
+    return data;
+  }
+  explicit operator std::span<const std::uint8_t>() const noexcept {
+    return data;
+  }
 };
 
 class PacketSource {
@@ -26,7 +30,9 @@ public:
 
     Iterator() = default;
 
-    const RawPacket &operator*() const { return *current_; }
+    const RawPacket &operator*() const {
+      return *current_;
+    }
 
     Iterator &operator++() {
       if (source_ && !source_->next()) {
@@ -38,9 +44,13 @@ public:
       return *this;
     }
 
-    void operator++(int) { ++*this; }
+    void operator++(int) {
+      ++*this;
+    }
 
-    friend bool operator==(const Iterator &a, const Iterator &b) noexcept { return a.source_ == b.source_; }
+    friend bool operator==(const Iterator &a, const Iterator &b) noexcept {
+      return a.source_ == b.source_;
+    }
 
   private:
     friend class PacketSource;
@@ -59,8 +69,12 @@ public:
 
   virtual ~PacketSource() = default;
 
-  Iterator begin() { return Iterator{this}; }
-  Iterator end() const noexcept { return {}; }
+  Iterator begin() {
+    return Iterator{this};
+  }
+  Iterator end() const noexcept {
+    return {};
+  }
 
 protected:
   virtual bool             next()          = 0;

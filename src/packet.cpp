@@ -16,7 +16,9 @@ Packet &Packet::operator=(const Packet &other) {
   return *this;
 }
 
-void Packet::addLayer(const Layer &l) { layers.push_back(l.clone()); }
+void Packet::addLayer(const Layer &l) {
+  layers.push_back(l.clone());
+}
 
 std::string Packet::toString() const {
   std::ostringstream ss;

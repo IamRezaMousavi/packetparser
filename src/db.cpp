@@ -38,7 +38,9 @@ void DBConnection::connect() {
   }
 }
 
-void DBConnection::close() { connection_.reset(); }
+void DBConnection::close() {
+  connection_.reset();
+}
 
 void DBConnection::reconnect() {
   close();
@@ -177,4 +179,6 @@ bool DBConnection::insert_tls(const Packet &tlsPacket) {
   return true;
 }
 
-void DBConnection::setAppname(const std::string &appname) { this->appname = appname; }
+void DBConnection::setAppname(const std::string &appname) {
+  this->appname = appname;
+}

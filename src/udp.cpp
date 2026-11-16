@@ -19,9 +19,13 @@ UDP::UDP(std::span<const uint8_t> data) {
   dport                    = ntohs(udp->uh_dport);
 }
 
-size_t UDP::size() const { return sizeof(struct udphdr); }
+size_t UDP::size() const {
+  return sizeof(struct udphdr);
+}
 
-std::unique_ptr<Layer> UDP::clone() const { return std::make_unique<UDP>(*this); }
+std::unique_ptr<Layer> UDP::clone() const {
+  return std::make_unique<UDP>(*this);
+}
 
 std::string UDP::toString() const {
   std::ostringstream ss;

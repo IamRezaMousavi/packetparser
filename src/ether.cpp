@@ -19,9 +19,13 @@ Ether::Ether(std::span<const uint8_t> data) {
   eth_type                       = ntohs(eth->ether_type);
 }
 
-size_t Ether::size() const { return sizeof(struct ether_header); }
+size_t Ether::size() const {
+  return sizeof(struct ether_header);
+}
 
-std::unique_ptr<Layer> Ether::clone() const { return std::make_unique<Ether>(*this); }
+std::unique_ptr<Layer> Ether::clone() const {
+  return std::make_unique<Ether>(*this);
+}
 
 std::string Ether::toString() const {
   std::ostringstream ss;

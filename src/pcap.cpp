@@ -33,7 +33,9 @@ bool PcapReader::next() {
   return true;
 }
 
-const RawPacket &PcapReader::current() const { return current_; }
+const RawPacket &PcapReader::current() const {
+  return current_;
+}
 
 void PcapReader::set_filter(const std::string &filter) {
   bpf_program prog{};

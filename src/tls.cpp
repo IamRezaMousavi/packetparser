@@ -54,9 +54,13 @@ TLS::TLS(std::span<const uint8_t> data) {
   handshake = std::move(hs);
 }
 
-size_t TLS::size() const { return length + 5; }
+size_t TLS::size() const {
+  return length + 5;
+}
 
-std::unique_ptr<Layer> TLS::clone() const { return std::make_unique<TLS>(*this); }
+std::unique_ptr<Layer> TLS::clone() const {
+  return std::make_unique<TLS>(*this);
+}
 
 void TLSHandshake::parseClientHello(std::span<const uint8_t> data) {
   size_t offset = 0;

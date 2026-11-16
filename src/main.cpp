@@ -138,7 +138,9 @@ void cli_parser(int argc, char *argv[]) {
 
 std::atomic<bool> running{true};
 
-void on_signal(int) { running = false; }
+void on_signal(int) {
+  running = false;
+}
 
 int main(int argc, char *argv[]) {
   cli_parser(argc, argv);

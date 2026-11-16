@@ -24,9 +24,13 @@ TCP::TCP(std::span<const uint8_t> data) {
   dport = ntohs(tcp->th_dport);
 }
 
-size_t TCP::size() const { return thl; }
+size_t TCP::size() const {
+  return thl;
+}
 
-std::unique_ptr<Layer> TCP::clone() const { return std::make_unique<TCP>(*this); }
+std::unique_ptr<Layer> TCP::clone() const {
+  return std::make_unique<TCP>(*this);
+}
 
 std::string TCP::toString() const {
   std::ostringstream ss;

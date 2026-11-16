@@ -7,9 +7,13 @@
 #include <stdexcept>
 #include <string_view>
 
-inline bool isCompressionPointer(uint8_t label_byte) noexcept { return (label_byte & 0xC0) == 0xC0; }
+inline bool isCompressionPointer(uint8_t label_byte) noexcept {
+  return (label_byte & 0xC0) == 0xC0;
+}
 
-inline bool isEndOfName(uint8_t label_byte) noexcept { return label_byte == 0x00; }
+inline bool isEndOfName(uint8_t label_byte) noexcept {
+  return label_byte == 0x00;
+}
 
 static uint16_t extractCompressionOffset(std::span<const uint8_t> msg, size_t position) {
   if (position + 1 >= msg.size())
@@ -98,7 +102,9 @@ DNSQuery::DNSQuery(std::span<const uint8_t> full_msg, size_t offset) {
   m_size = offset - start;
 }
 
-size_t DNSQuery::size() const { return m_size; }
+size_t DNSQuery::size() const {
+  return m_size;
+}
 
 std::string DNSQuery::toString(QType type) const {
   switch (type) {
@@ -178,9 +184,13 @@ DNS::DNS(std::span<const uint8_t> data) {
   m_size = offset;
 }
 
-size_t DNS::size() const { return m_size; }
+size_t DNS::size() const {
+  return m_size;
+}
 
-std::unique_ptr<Layer> DNS::clone() const { return std::make_unique<DNS>(*this); }
+std::unique_ptr<Layer> DNS::clone() const {
+  return std::make_unique<DNS>(*this);
+}
 
 std::string DNS::toString() const {
   std::ostringstream ss;
